@@ -73,13 +73,17 @@ const commands = [
                 return;
             }
 
-            const dateTimeOption = { month: 'numeric', day: 'numeric', weekday: 'short', hour: '2-digit', minute: '2-digit' };
             const timeOption = { hour: '2-digit', minute: '2-digit' };
 
             const response = [
                 `**🗺️ '${mapName}' 향후 일정**`,
                 ...schedules.map((item, i) => {
-                    const startStr = item.startTime.toLocaleString('ko-KR', dateTimeOption);
+                    const month = item.startTime.getMonth() + 1;
+                    const day = item.startTime.getDate();
+                    const weekday = item.startTime.toLocaleDateString('ko-KR', { weekday: 'short' });
+                    const startTime = item.startTime.toLocaleTimeString('ko-KR', timeOption);
+                    const startStr = `${month}/${day} (${weekday}) ${startTime}`;
+
                     const endStr = item.endTime.toLocaleTimeString('ko-KR', timeOption);
 
                     const status = item.isCurrent ? ' **(현재 진행 중! 🔥)**' : '';
