@@ -41,7 +41,14 @@ client.once(Events.ClientReady, async readyClient => {
 
 // 상호작용 처리
 client.on(Events.InteractionCreate, async interaction => {
-    console.log(`[Interaction] type: ${interaction.type}, commandName: ${interaction.commandName}`); // 디버깅용 로그
+    // 상세 로깅
+    const userTag = interaction.user.tag;
+    const userId = interaction.user.id;
+    // 닉네임: 멤버 정보가 있으면 닉네임, 없으면(DM 등) 유저네임 사용
+    const nickname = interaction.member ? (interaction.member.nickname || interaction.user.displayName) : interaction.user.displayName;
+    const channel = interaction.channel ? interaction.channel.name : 'Direct Message';
+    const guild = interaction.guild ? interaction.guild.name : 'DM';
+    console.log(`[Command] User: ${userTag} (Nick: ${nickname}, ID: ${userId}) | Command: ${interaction.commandName} | Channel: ${channel} (${guild})`);
 
     // 슬래시 명령어 실행
     if (interaction.isChatInputCommand()) {

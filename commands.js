@@ -1,5 +1,6 @@
 import { SlashCommandBuilder } from 'discord.js';
 import { getCurrentRotation, generateRotationSeed, getNextMapSchedules, maps } from './mapRotation.js';
+import { zodiacSigns, getDailyHoroscope } from './horoscope.js';
 
 /**
  * 명령어 정의 목록
@@ -78,11 +79,7 @@ const commands = [
             const response = [
                 `**🗺️ '${mapName}' 향후 일정**`,
                 ...schedules.map((item, i) => {
-                    // 시작 시간은 날짜 포함
                     const startStr = item.startTime.toLocaleString('ko-KR', dateTimeOption);
-                    // 종료 시간은 시간만 표시 (같은 날일 확률이 높지만, 날짜가 넘어갈 수도 있음. 그래도 간결함을 위해 시간만 혹은 필요시 날짜 포함? 
-                    // 보통 시작 날짜만 알면 충분하므로 종료는 시간만 표시하되, 사용자 요청이 "날짜랑 요일"이므로 시작 시간에 집중.
-                    // 종료 시간까지 날짜를 넣으면 너무 길어짐. 시작 시간에만 넣는 것이 일반적 패턴.
                     const endStr = item.endTime.toLocaleTimeString('ko-KR', timeOption);
 
                     const status = item.isCurrent ? ' **(현재 진행 중! 🔥)**' : '';
@@ -94,11 +91,51 @@ const commands = [
         },
         async autocomplete(interaction) {
             const focusedValue = interaction.options.getFocused();
-            const choices = maps; // mapRotation.js에서 가져온 전체 맵 리스트
+            const choices = maps;
             const filtered = choices.filter(choice => choice.includes(focusedValue));
-            // 최대 25개까지만 반환 가능
             await interaction.respond(
                 filtered.slice(0, 25).map(choice => ({ name: choice, value: choice }))
+            );
+        }
+    },
+    // /운세 명령어
+    {
+        data: new SlashCommandBuilder()
+            .setName('운세')
+            .setDescription('오늘의 별자리 운세를 확인합니다.')
+            .addStringOption(option =>
+                option.setName('별자리')
+                    .setDescription('운세를 확인할 별자리')
+                    .setRequired(true)
+                    .setAutocomplete(true)
+            ),
+        async execute(interaction) {
+            await interaction.deferReply(); // API 호출 시간이 걸릴 수 있으므로 defer
+
+            try {
+                const sign = interaction.options.getString('별자리');
+                const contentRaw = await getDailyHoroscope(sign);
+
+                const parts = contentRaw.split('|');
+                let message = `**🌠 [${sign}] 오늘의 운세**\n\n${parts[0]}`;
+
+                if (parts.length >= 3) {
+                    message += `\n\n🗺️ **추천 맵**: ${parts[1]}`;
+                    message += `\n⚔️ **추천 직업**: ${parts[2]}`;
+                }
+
+                await interaction.editReply(message);
+            } catch (error) {
+                console.error(error);
+                await interaction.editReply('운세를 가져오는 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
+            }
+        },
+        async autocomplete(interaction) {
+            const focusedValue = interaction.options.getFocused();
+            const choices = Object.values(zodiacSigns);
+            const filtered = choices.filter(choice => choice.includes(focusedValue));
+            await interaction.respond(
+                filtered.map(choice => ({ name: choice, value: choice }))
             );
         }
     }

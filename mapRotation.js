@@ -1,13 +1,7 @@
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import db from './db.js';
 
 // 맵 목록 로드
-const mapListPath = path.join(__dirname, 'map_list.json');
-const maps = JSON.parse(fs.readFileSync(mapListPath, 'utf8'));
+const maps = db.prepare('SELECT name FROM maps ORDER BY rotation_order ASC').pluck().all();
 
 /**
  * 설정값
