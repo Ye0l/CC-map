@@ -39,7 +39,7 @@ const commands = [
 
             const response = [
                 `**📅 향후 ${seed.length}개 로테이션 일정**`,
-                ...seed.map((item, i) => `${i + 1}. [${item.time.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}] **${item.map}**`)
+                ...seed.map((item, i) => `${i + 1}. [${item.time.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}] **:${item.map.emote}: ${item.map.name}**`)
             ].join('\n');
 
             await interaction.reply(response);
@@ -80,9 +80,11 @@ const commands = [
             }
 
             const timeOption = { hour: '2-digit', minute: '2-digit' };
+            const mapObj = maps.find(m => m.name === mapName);
+            const mapDisplay = mapObj ? `:${mapObj.emote}: ${mapName}` : mapName;
 
             const response = [
-                `**🗺️ '${mapName}' 향후 일정**`,
+                `**🗺️ ${mapDisplay} 향후 일정**`,
                 ...schedules.map((item, i) => {
                     const month = item.startTime.getMonth() + 1;
                     const day = item.startTime.getDate();
@@ -101,7 +103,7 @@ const commands = [
         },
         async autocomplete(interaction) {
             const focusedValue = interaction.options.getFocused();
-            const choices = maps;
+            const choices = maps.map(m => m.name);
             const filtered = choices.filter(choice => choice.includes(focusedValue));
             await interaction.respond(
                 filtered.slice(0, 25).map(choice => ({ name: choice, value: choice }))
@@ -134,10 +136,15 @@ const commands = [
                 const contentRaw = await getDailyHoroscope(sign);
 
                 const parts = contentRaw.split('|');
-                let message = `**🌠 [${sign}] 오늘의 운세**\n\n${parts[0]}`;
+                const formattedHoroscope = parts[0].split('.').map(s => s.trim()).filter(s => s).join('.\n');
+                let message = `**🌠 [${sign}] 오늘의 운세**\n\n${formattedHoroscope}`;
 
                 if (parts.length >= 3) {
-                    message += `\n\n🗺️ **추천 맵**: ${parts[1]}`;
+                    const recommendedMapName = parts[1].trim();
+                    const mapObj = maps.find(m => m.name === recommendedMapName);
+                    const mapDisplay = mapObj ? `:${mapObj.emote}: ${recommendedMapName}` : recommendedMapName;
+
+                    message += `\n\n🗺️ **추천 맵**: ${mapDisplay}`;
                     message += `\n⚔️ **추천 직업**: ${parts[2]}`;
                 }
 
@@ -162,10 +169,10 @@ function formatRotationMessage(rotation) {
     const { current, next } = rotation;
     const timeOption = { hour: '2-digit', minute: '2-digit' };
     return [
-        `**[현재 맵]** ${current.map}`,
+        `**[현재 맵]** :${current.map.emote}: ${current.map.name}`,
         `🕒 종료 시간: ${current.endTime.toLocaleTimeString('ko-KR', timeOption)}`,
         '',
-        `**[다음 맵]** ${next.map}`,
+        `**[다음 맵]** :${next.map.emote}: ${next.map.name}`,
         `🕒 시작 시간: ${next.startTime.toLocaleTimeString('ko-KR', timeOption)}`
     ].join('\n');
 }

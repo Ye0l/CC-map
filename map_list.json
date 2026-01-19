@@ -1,8 +1,26 @@
 [
-  "팔라이스트라",
-  "화산심장",
-  "동방 꼭두각시 어전",
-  "바닷가 전투장",
-  "절정의 구름",
-  "붉은 사막"
+  {
+    "name": "팔라이스트라",
+    "emote": "medal"
+  },
+  {
+    "name": "화산심장",
+    "emote": "volcano"
+  },
+  {
+    "name": "동방 꼭두각시 어전",
+    "emote": "dolls"
+  },
+  {
+    "name": "바닷가 전투장",
+    "emote": "island"
+  },
+  {
+    "name": "절정의 구름",
+    "emote": "cloud_tornado"
+  },
+  {
+    "name": "붉은 사막",
+    "emote": "desert"
+  }
 ]

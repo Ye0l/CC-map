@@ -1,7 +1,8 @@
 import db from './db.js';
 
 // 맵 목록 로드
-const maps = db.prepare('SELECT name FROM maps ORDER BY rotation_order ASC').pluck().all();
+// 맵 목록 로드 ({ name, emote } 객체 배열)
+const maps = db.prepare('SELECT name, emote FROM maps ORDER BY rotation_order ASC').all();
 
 /**
  * 설정값
@@ -21,7 +22,7 @@ export function getMapIndexAtTime(timestamp) {
 }
 
 /**
- * 특정 시점의 맵 이름 반환
+ * 특정 시점의 맵 정보 반환
  */
 export function getMapAtTime(timestamp) {
     const index = getMapIndexAtTime(timestamp);
@@ -39,7 +40,7 @@ export function generateRotationSeed(startTime, count = 10) {
         const rotationTime = currentRotationStart + (i * ROTATION_INTERVAL);
         seed.push({
             time: new Date(rotationTime),
-            map: getMapAtTime(rotationTime)
+            map: getMapAtTime(rotationTime) // { name, emote }
         });
     }
     return seed;
@@ -73,7 +74,7 @@ export function getCurrentRotation() {
  * @returns {Array<{startTime: Date, endTime: Date}>} 일정 목록
  */
 export function getNextMapSchedules(targetMapName, count = 5) {
-    const targetIndex = maps.indexOf(targetMapName);
+    const targetIndex = maps.findIndex(m => m.name === targetMapName);
     if (targetIndex === -1) return [];
 
     const now = Date.now();
