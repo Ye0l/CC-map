@@ -112,8 +112,15 @@ const commands = [
         async execute(interaction) {
             await interaction.deferReply(); // API 호출 시간이 걸릴 수 있으므로 defer
 
+            const sign = interaction.options.getString('별자리');
+            const validSigns = Object.values(zodiacSigns);
+
+            if (!validSigns.includes(sign)) {
+                await interaction.editReply(`❌ 올바르지 않은 별자리입니다. 다음 중에서 선택해주세요!\n${validSigns.join(', ')}`);
+                return;
+            }
+
             try {
-                const sign = interaction.options.getString('별자리');
                 const contentRaw = await getDailyHoroscope(sign);
 
                 const parts = contentRaw.split('|');
