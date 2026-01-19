@@ -63,10 +63,16 @@ const commands = [
                     .setDescription('검색할 맵 이름')
                     .setRequired(true)
                     .setAutocomplete(true)
+            )
+            .addIntegerOption(option =>
+                option.setName('개수')
+                    .setDescription('표시할 시간표 개수')
+                    .setRequired(false)
             ),
         async execute(interaction) {
             const mapName = interaction.options.getString('맵이름');
-            const schedules = getNextMapSchedules(mapName, 5);
+            const count = interaction.options.getInteger('개수') || 1;
+            const schedules = getNextMapSchedules(mapName, count);
 
             if (schedules.length === 0) {
                 await interaction.reply({ content: `❌ '${mapName}' 맵을 찾을 수 없습니다.`, ephemeral: true });
