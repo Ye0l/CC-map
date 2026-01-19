@@ -84,7 +84,7 @@ const commands = [
             const mapDisplay = mapObj ? `:${mapObj.emote}: ${mapName}` : mapName;
 
             const response = [
-                `**🗺️ ${mapDisplay} 향후 일정**`,
+                `**${mapDisplay} 향후 일정**`,
                 ...schedules.map((item, i) => {
                     const month = item.startTime.getMonth() + 1;
                     const day = item.startTime.getDate();
