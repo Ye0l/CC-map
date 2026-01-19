@@ -17,6 +17,7 @@ const initDb = () => {
         CREATE TABLE IF NOT EXISTS maps (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
+            emote TEXT,
             rotation_order INTEGER UNIQUE
         )
     `);
@@ -39,10 +40,10 @@ const initDb = () => {
     if (fs.existsSync(mapListPath)) {
       const maps = JSON.parse(fs.readFileSync(mapListPath, 'utf8'));
 
-      const insert = db.prepare('INSERT INTO maps (name, rotation_order) VALUES (@name, @order)');
+      const insert = db.prepare('INSERT INTO maps (name, emote, rotation_order) VALUES (@name, @emote, @order)');
       const insertMany = db.transaction((maps) => {
         for (let i = 0; i < maps.length; i++) {
-          insert.run({ name: maps[i], order: i });
+          insert.run({ name: maps[i].name, emote: maps[i].emote, order: i });
         }
       });
 
