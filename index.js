@@ -4,6 +4,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import commands from './commands.js';
 import { startWebServer } from './web/server.js';
+import { preGenerateNextDayData } from './horoscope.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -84,6 +85,15 @@ client.on(Events.InteractionCreate, async interaction => {
 
 // 웹 UI 서버 시작
 startWebServer();
+
+// 배치 작업 스케줄러 (1시간마다 실행)
+const ONE_HOUR = 60 * 60 * 1000;
+setInterval(() => {
+    preGenerateNextDayData().catch(console.error);
+}, ONE_HOUR);
+
+// 초기화 시 1회 즉시 실행 (서버 시작 시)
+preGenerateNextDayData().catch(console.error);
 
 // 봇 로그인
 client.login(token);

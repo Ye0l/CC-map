@@ -45,6 +45,19 @@ app.delete('/api/tips/:id', (req, res) => {
   }
 });
 
+// API: 팁 수정
+app.put('/api/tips/:id', (req, res) => {
+  const { id } = req.params;
+  const { category, keyword, content } = req.body;
+  try {
+    const stmt = db.prepare('UPDATE tips SET category = ?, keyword = ?, content = ? WHERE id = ?');
+    stmt.run(category, keyword, content, id);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // API: 맵 목록 조회
 app.get('/api/maps', (req, res) => {
   try {

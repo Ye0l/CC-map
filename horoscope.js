@@ -32,13 +32,13 @@ export const zodiacSigns = {
 const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
 
 /**
- * 오늘 날짜 문자열 반환 (YYYY-MM-DD, 한국 시간 기준)
+ * 날짜 문자열 반환 (YYYY-MM-DD, 한국 시간 기준)
+ * dateObj가 없으면 현재 시간 기준
  */
-function getTodayDateString() {
-  const now = new Date();
+function getDateString(dateObj = new Date()) {
   // UTC+9 적용
   const kstOffset = 9 * 60 * 60 * 1000;
-  const kstDate = new Date(now.getTime() + kstOffset);
+  const kstDate = new Date(dateObj.getTime() + kstOffset);
   return kstDate.toISOString().split('T')[0];
 }
 
@@ -46,7 +46,7 @@ function getTodayDateString() {
  * 특정 별자리의 오늘 운세 조회
  */
 export async function getDailyHoroscope(signKo) {
-  const date = getTodayDateString();
+  const date = getDateString();
 
   // 한글 별자리 이름을 영문 키로 변환 (역매핑)
   const signEn = Object.keys(zodiacSigns).find(key => zodiacSigns[key] === signKo);
@@ -134,87 +134,128 @@ async function fetchAndSaveDailyHoroscopes(date) {
 }
 
 /**
+ * 해당 날짜의 직업 추천 데이터를 생성 및 저장
+ */
+async function generateDailyJobRecommendations(date) {
+  // 1. 이미 데이터가 있는지 확인
+  const existingCount = db.prepare('SELECT COUNT(*) as count FROM daily_job_recommendations WHERE date = ?').get(date).count;
+  if (existingCount > 0) {
+    return; // 이미 존재하면 스킵
+  }
+
+  console.log(`Generating daily job recommendations for ${date}...`);
+
+  // 모든 직업 목록 가져오기
+  const jobs = db.prepare('SELECT name FROM job_seeds').all().map(r => r.name);
+  if (jobs.length === 0) {
+    throw new Error('No jobs found in database');
+  }
+
+  // 전체 직업 스킬 데이터 준비
+  let allSkillData = '';
+  try {
+    const skillsPath = path.join(__dirname, 'ff14_pvp_skills.json');
+    if (fs.existsSync(skillsPath)) {
+      const skills = JSON.parse(fs.readFileSync(skillsPath, 'utf8'));
+
+      allSkillData = jobs.map(job => {
+        const jobSkills = skills[job];
+        if (!jobSkills) return '';
+
+        const skillTexts = jobSkills.map(s => {
+          let effect = s.effect.replace(/\n/g, ' ');
+          effect = effect.replace(/위력: \d+~?\d*/g, '');
+          effect = effect.replace(/회복력: \d+~?\d*/g, '');
+          effect = effect.replace(/지속 회복력: \d+/g, '');
+          effect = effect.replace(/지속 피해 위력: \d+/g, '');
+          effect = effect.replace(/※.*?입니다\./g, '');
+          effect = effect.replace(/※.*?변화합니다\./g, '');
+          effect = effect.replace(/※ 이 기술은 단축바에 등록할 수 없습니다\./g, '');
+          effect = effect.replace(/\s+/g, ' ').trim();
+          return `**${s.name}**: ${effect}`;
+        }).join(' | ');
+
+        return `### ${job}\n${skillTexts}`;
+      }).join('\n\n');
+    }
+  } catch (e) {
+    console.error("Error reading skills for recommendation:", e);
+  }
+
+  const prompt = getAllJobsRecommendationPrompt(date, allSkillData);
+
+  try {
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const text = response.text().trim();
+
+    // JSON 파싱
+    const jsonStr = text.replace(/```json/g, '').replace(/```/g, '').trim();
+    const recommendations = JSON.parse(jsonStr);
+
+    // 트랜잭션으로 일괄 저장
+    const insert = db.prepare('INSERT OR IGNORE INTO daily_job_recommendations (date, job_name, comment) VALUES (@date, @job_name, @comment)');
+    const insertMany = db.transaction((data) => {
+      for (const [jobName, comment] of Object.entries(data)) {
+        insert.run({ date, job_name: jobName, comment });
+      }
+    });
+
+    insertMany(recommendations);
+    console.log(`Saved job recommendations for ${date}.`);
+  } catch (error) {
+    console.error('Error generating job recommendation:', error);
+    // 에러 발생 시 throw하지 않고 로그만 남김 (배치 등에서 전체 중단을 방지하기 위함일 수 있으나, 필요 시 수정)
+  }
+}
+
+/**
  * 오늘의 추천 직업 및 멘트 조회 (일괄 생성 및 랜덤 반환)
  */
 export async function getDailyJobRecommendation(count = 1) {
-  const date = getTodayDateString();
+  const date = getDateString();
 
-  // 1. 오늘 날짜의 데이터가 있는지 확인 (아무거나 하나만 조회해도 됨)
-  const existingCount = db.prepare('SELECT COUNT(*) as count FROM daily_job_recommendations WHERE date = ?').get(date).count;
+  // 데이터 생성 (없을 경우에만 내부적으로 실행됨)
+  await generateDailyJobRecommendations(date);
 
-  // 2. 데이터가 없으면 일괄 생성 (Batch Generation)
-  if (existingCount === 0) {
-    console.log(`Generating daily job recommendations for ${date}...`);
-
-    // 모든 직업 목록 가져오기
-    const jobs = db.prepare('SELECT name FROM job_seeds').all().map(r => r.name);
-    if (jobs.length === 0) {
-      throw new Error('No jobs found in database');
-    }
-
-    // 전체 직업 스킬 데이터 준비
-    let allSkillData = '';
-    try {
-      const skillsPath = path.join(__dirname, 'ff14_pvp_skills.json');
-      if (fs.existsSync(skillsPath)) {
-        const skills = JSON.parse(fs.readFileSync(skillsPath, 'utf8'));
-
-        allSkillData = jobs.map(job => {
-          const jobSkills = skills[job];
-          if (!jobSkills) return '';
-
-          const skillTexts = jobSkills.map(s => {
-            let effect = s.effect.replace(/\n/g, ' ');
-            effect = effect.replace(/위력: \d+~?\d*/g, '');
-            effect = effect.replace(/회복력: \d+~?\d*/g, '');
-            effect = effect.replace(/지속 회복력: \d+/g, '');
-            effect = effect.replace(/지속 피해 위력: \d+/g, '');
-            effect = effect.replace(/※.*?입니다\./g, '');
-            effect = effect.replace(/※.*?변화합니다\./g, '');
-            effect = effect.replace(/※ 이 기술은 단축바에 등록할 수 없습니다\./g, '');
-            effect = effect.replace(/\s+/g, ' ').trim();
-            return `**${s.name}**: ${effect}`;
-          }).join(' | ');
-
-          return `### ${job}\n${skillTexts}`;
-        }).join('\n\n');
-      }
-    } catch (e) {
-      console.error("Error reading skills for recommendation:", e);
-    }
-
-    const prompt = getAllJobsRecommendationPrompt(date, allSkillData);
-
-    try {
-      const result = await model.generateContent(prompt);
-      const response = await result.response;
-      const text = response.text().trim();
-
-      // JSON 파싱
-      const jsonStr = text.replace(/```json/g, '').replace(/```/g, '').trim();
-      const recommendations = JSON.parse(jsonStr);
-
-      // 트랜잭션으로 일괄 저장
-      const insert = db.prepare('INSERT OR IGNORE INTO daily_job_recommendations (date, job_name, comment) VALUES (@date, @job_name, @comment)');
-      const insertMany = db.transaction((data) => {
-        for (const [jobName, comment] of Object.entries(data)) {
-          insert.run({ date, job_name: jobName, comment });
-        }
-      });
-
-      insertMany(recommendations);
-
-    } catch (error) {
-      console.error('Error generating job recommendation:', error);
-      // AI 실패 시 기본 데이터라도 반환하기 위해 여기서 에러 처리하지 않고 아래 리턴 로직으로 흐르게 함
-    }
-  }
-
-  // 3. 요청 개수만큼 랜덤으로 뽑아서 반환
+  // 요청 개수만큼 랜덤으로 뽑아서 반환
   const rows = db.prepare('SELECT job_name, comment FROM daily_job_recommendations WHERE date = ? ORDER BY RANDOM() LIMIT ?').all(date, count);
 
   if (count === 1) {
     return rows[0] || { job_name: "나이트", comment: "직업을 가져오지 못했습니다. 다시 시도해주세요." };
   }
   return rows;
+}
+
+/**
+ * 내일 날짜의 데이터를 미리 생성 (배치용)
+ */
+export async function preGenerateNextDayData() {
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const date = getDateString(tomorrow);
+
+  console.log(`[Batch] Checking pre-generation for ${date}...`);
+
+  // 1. 운세 데이터 확인 및 생성
+  const horoCount = db.prepare('SELECT COUNT(*) as count FROM horoscopes WHERE date = ?').get(date).count;
+  if (horoCount === 0) {
+    console.log(`[Batch] Pre-generating horoscopes for ${date}...`);
+    try {
+      await fetchAndSaveDailyHoroscopes(date);
+    } catch (e) {
+      console.error(`[Batch] Failed to generate horoscopes for ${date}:`, e);
+    }
+  } else {
+    console.log(`[Batch] Horoscopes for ${date} already exist.`);
+  }
+
+  // 2. 직업 추천 데이터 확인 및 생성
+  const jobCount = db.prepare('SELECT COUNT(*) as count FROM daily_job_recommendations WHERE date = ?').get(date).count;
+  if (jobCount === 0) {
+    console.log(`[Batch] Pre-generating job recommendations for ${date}...`);
+    await generateDailyJobRecommendations(date);
+  } else {
+    console.log(`[Batch] Job recommendations for ${date} already exist.`);
+  }
 }
