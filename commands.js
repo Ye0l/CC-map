@@ -1,7 +1,16 @@
-import { SlashCommandBuilder } from 'discord.js';
+import { SlashCommandBuilder, EmbedBuilder } from 'discord.js';
 import { getCurrentRotation, generateRotationSeed, getNextMapSchedules, maps } from './mapRotation.js';
 import { zodiacSigns, getDailyHoroscope, getDailyJobRecommendation } from './horoscope.js';
 import db from './db.js';
+
+// 직업 이모지 상수
+const jobEmotes = {
+    '나이트': '<:PLD:1465245862363136145>', '전사': '<:WAR:1465245785934528574>', '암흑기사': '<:DRK:1465245768989540467>', '건브레이커': '<:GNB:1465245757803335680>',
+    '백마도사': '<:WHM:1465245779349213255>', '학자': '<:SCH:1465245859498164276>', '점성술사': '<:AST:1465245864770666609>', '현자': '<:SGE:1465245752090689556>',
+    '몽크': '<:MNK:1465245792070668363>', '용기사': '<:DRG:1465245799049986161>', '닌자': '<:NIN:1465245773418598495>', '사무라이': '<:SAM:1465245763616636938>', '리퍼': '<:RPR:1465245753986253015>', '바이퍼': '<:VPR:1465245750509174818>',
+    '음유시인': '<:BRD:1465245746642030613>', '기공사': '<:MCH:1465245767047315629>', '무도가': '<:DNC:1465245755613777980>',
+    '흑마도사': '<:BLM:1465245782004334666>', '소환사': '<:SMN:1465245774890799290>', '적마도사': '<:RDM:1465245765373923536>', '픽토맨서': '<:PCT:1465245748588187825>'
+};
 
 /**
  * 명령어 정의 목록
@@ -15,7 +24,18 @@ const commands = [
             .setDescriptionLocalizations({ 'ko': '현재 활성화된 맵 정보를 보여줍니다.' }),
         async execute(interaction) {
             const rotation = getCurrentRotation();
-            await interaction.reply(formatRotationMessage(rotation));
+
+            const timeOption = { hour: '2-digit', minute: '2-digit' };
+            const embed = new EmbedBuilder()
+                .setColor(0x0099FF)
+                .setTitle('🗺️ 현재 맵 정보')
+                .addFields(
+                    { name: '🔥 현재 진행 중', value: `**:${rotation.current.map.emote}: ${rotation.current.map.name}**\n🕒 ~ ${rotation.current.endTime.toLocaleTimeString('ko-KR', timeOption)} 종료`, inline: false },
+                    { name: '🔜 다음 맵', value: `**:${rotation.next.map.emote}: ${rotation.next.map.name}**\n🕒 ${rotation.next.startTime.toLocaleTimeString('ko-KR', timeOption)} 시작`, inline: false }
+                )
+                .setTimestamp();
+
+            await interaction.reply({ embeds: [embed] });
         }
     },
     {
@@ -35,12 +55,15 @@ const commands = [
             const count = interaction.options.getInteger('count') || 5;
             const seed = generateRotationSeed(Date.now(), Math.min(count, 10));
 
-            const response = [
-                `**📅 향후 ${seed.length}개 로테이션 일정**`,
-                ...seed.map((item, i) => `${i + 1}. [${item.time.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}] **:${item.map.emote}: ${item.map.name}**`)
-            ].join('\n');
+            const description = seed.map((item, i) => `${i + 1}. [${item.time.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}] **:${item.map.emote}: ${item.map.name}**`).join('\n');
 
-            await interaction.reply(response);
+            const embed = new EmbedBuilder()
+                .setColor(0x0099FF)
+                .setTitle(`📅 향후 ${seed.length}개 로테이션 일정`)
+                .setDescription(description)
+                .setFooter({ text: 'CC-Map Bot' });
+
+            await interaction.reply({ embeds: [embed] });
         },
         async autocomplete(interaction) {
             const focusedValue = interaction.options.getFocused();
@@ -86,23 +109,25 @@ const commands = [
             const mapObj = maps.find(m => m.name === mapName);
             const mapDisplay = mapObj ? `:${mapObj.emote}: ${mapName}` : mapName;
 
-            const response = [
-                `**${mapDisplay} 향후 일정**`,
-                ...schedules.map((item, i) => {
-                    const month = item.startTime.getMonth() + 1;
-                    const day = item.startTime.getDate();
-                    const weekday = item.startTime.toLocaleDateString('ko-KR', { weekday: 'short' });
-                    const startTime = item.startTime.toLocaleTimeString('ko-KR', timeOption);
-                    const startStr = `${month}/${day} (${weekday}) ${startTime}`;
+            const scheduleList = schedules.map((item, i) => {
+                const month = item.startTime.getMonth() + 1;
+                const day = item.startTime.getDate();
+                const weekday = item.startTime.toLocaleDateString('ko-KR', { weekday: 'short' });
+                const startTime = item.startTime.toLocaleTimeString('ko-KR', timeOption);
+                const startStr = `${month}/${day} (${weekday}) ${startTime}`;
 
-                    const endStr = item.endTime.toLocaleTimeString('ko-KR', timeOption);
+                const endStr = item.endTime.toLocaleTimeString('ko-KR', timeOption);
 
-                    const status = item.isCurrent ? ' **(현재 진행 중! 🔥)**' : '';
-                    return `- ${startStr} ~ ${endStr}${status}`;
-                })
-            ].join('\n');
+                const status = item.isCurrent ? ' **(현재 진행 중! 🔥)**' : '';
+                return `- ${startStr} ~ ${endStr}${status}`;
+            }).join('\n');
 
-            await interaction.reply(response);
+            const embed = new EmbedBuilder()
+                .setColor(0x0099FF)
+                .setTitle(`🕰️ ${mapDisplay} 일정`)
+                .setDescription(scheduleList);
+
+            await interaction.reply({ embeds: [embed] });
         },
         async autocomplete(interaction) {
             const focusedValue = interaction.options.getFocused();
@@ -143,18 +168,24 @@ const commands = [
 
                 const parts = contentRaw.split('|');
                 const formattedHoroscope = parts[0].split('.').map(s => s.trim()).filter(s => s).join('.\n');
-                let message = `**🌠 [${sign}] 오늘의 운세**\n\n${formattedHoroscope}`;
+
+                const embed = new EmbedBuilder()
+                    .setColor(0x9b59b6)
+                    .setTitle(`🌠 [${sign}] 오늘의 운세`)
+                    .setDescription(formattedHoroscope);
 
                 if (parts.length >= 3) {
                     const recommendedMapName = parts[1].trim();
                     const mapObj = maps.find(m => m.name === recommendedMapName);
                     const mapDisplay = mapObj ? `:${mapObj.emote}: ${recommendedMapName}` : recommendedMapName;
 
-                    message += `\n\n🗺️ **추천 맵**: ${mapDisplay}`;
-                    message += `\n⚔️ **추천 직업**: ${parts[2]}`;
+                    embed.addFields(
+                        { name: '🗺️ 추천 맵', value: mapDisplay, inline: true },
+                        { name: '⚔️ 추천 직업', value: parts[2].trim(), inline: true }
+                    );
                 }
 
-                await interaction.editReply(message);
+                await interaction.editReply({ embeds: [embed] });
             } catch (error) {
                 console.error(error);
                 await interaction.editReply('운세를 가져오는 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
@@ -194,25 +225,22 @@ const commands = [
                 const results = await getDailyJobRecommendation(count);
                 const recommendations = Array.isArray(results) ? results : [results];
 
-                const jobEmotes = {
-                    '나이트': '<:PLD:1465245862363136145>', '전사': '<:WAR:1465245785934528574>', '암흑기사': '<:DRK:1465245768989540467>', '건브레이커': '<:GNB:1465245757803335680>',
-                    '백마도사': '<:WHM:1465245779349213255>', '학자': '<:SCH:1465245859498164276>', '점성술사': '<:AST:1465245864770666609>', '현자': '<:SGE:1465245752090689556>',
-                    '몽크': '<:MNK:1465245792070668363>', '용기사': '<:DRG:1465245799049986161>', '닌자': '<:NIN:1465245773418598495>', '사무라이': '<:SAM:1465245763616636938>', '리퍼': '<:RPR:1465245753986253015>', '바이퍼': '<:VPR:1465245750509174818>',
-                    '음유시인': '<:BRD:1465245746642030613>', '기공사': '<:MCH:1465245767047315629>', '무도가': '<:DNC:1465245755613777980>',
-                    '흑마도사': '<:BLM:1465245782004334666>', '소환사': '<:SMN:1465245774890799290>', '적마도사': '<:RDM:1465245765373923536>', '픽토맨서': '<:PCT:1465245748588187825>'
-                };
+                const embed = new EmbedBuilder().setColor(0xE67E22);
 
                 if (isSimpleMode) {
                     const simpleList = recommendations.map(r => {
                         const emote = jobEmotes[r.job_name] || '';
                         return `- ${emote}**${r.job_name}**`;
                     }).join('\n');
-                    await interaction.editReply(`🎲 추천 직업 연속가챠\n${simpleList}`);
+                    embed.setTitle(`🎲 추천 직업 연속가챠 (${count}회)`);
+                    embed.setDescription(simpleList);
                 } else {
                     const r = recommendations[0];
                     const emote = jobEmotes[r.job_name] || '';
-                    await interaction.editReply(`🎲 오늘의 추천 직업은 ${emote}**${r.job_name}** 입니다!\n\n${r.comment}`);
+                    embed.setTitle(`🎲 오늘의 추천 직업`);
+                    embed.setDescription(`## ${emote} **${r.job_name}**\n\n${r.comment}`);
                 }
+                await interaction.editReply({ embeds: [embed] });
             } catch (error) {
                 console.error(error);
                 await interaction.editReply({ content: '직업을 추천하는 중 오류가 발생했습니다.', ephemeral: true });
@@ -250,7 +278,14 @@ const commands = [
             }
 
             const result = Math.floor(Math.random() * (max - min + 1)) + min;
-            await interaction.reply(`🎲 **주사위 굴리기!** (${min}-${max})\n결과: **${result}**`);
+
+            const embed = new EmbedBuilder()
+                .setColor(0x2ECC71)
+                .setTitle('🎲 주사위 굴리기!')
+                .setDescription(`범위: ${min} ~ ${max}`)
+                .addFields({ name: '결과', value: `# **${result}**` });
+
+            await interaction.reply({ embeds: [embed] });
         }
     },
     {
@@ -284,7 +319,6 @@ const commands = [
                 return;
             }
 
-            // 닉네임 가져오기
             const member = interaction.member;
             let targetMember;
             try {
@@ -317,14 +351,6 @@ const commands = [
                 isDraw = true;
             }
 
-            const response = [
-                `⚔️ **결투 발생!** ⚔️`,
-                `${userNick} 🎲 ${userRoll}  vs  ${targetRoll} 🎲 ${targetNick}`,
-                '',
-                resultMsg
-            ].join('\n');
-
-            // DB 업데이트 함수 (서버별 분리를 위해 user_id@guild_id 형식 사용)
             const guildId = interaction.guild.id;
             const updateStats = (userId, result) => {
                 const dbKey = `${userId}@${guildId}`;
@@ -348,7 +374,17 @@ const commands = [
                 updateStats(loserId, 'loss');
             }
 
-            await interaction.reply(response);
+            const embed = new EmbedBuilder()
+                .setColor(0xE74C3C)
+                .setTitle('⚔️ 결투 발생! ⚔️')
+                .addFields(
+                    { name: userNick, value: `🎲 ${userRoll}`, inline: true },
+                    { name: 'VS', value: '⚡', inline: true },
+                    { name: targetNick, value: `🎲 ${targetRoll}`, inline: true },
+                    { name: '결과', value: resultMsg, inline: false }
+                );
+
+            await interaction.reply({ embeds: [embed] });
         }
     },
     {
@@ -391,13 +427,17 @@ const commands = [
             const total = stats.wins + stats.losses + stats.draws;
             const winRate = total > 0 ? ((stats.wins / total) * 100).toFixed(1) : 0;
 
-            await interaction.reply({
-                content: `📊 **${targetNick}님의 전적**\n\n` +
-                    `🟢 승리: ${stats.wins}회\n` +
-                    `🔴 패배: ${stats.losses}회\n` +
-                    `⚪ 무승부: ${stats.draws}회\n` +
-                    `🔥 승률: ${winRate}%`
-            });
+            const embed = new EmbedBuilder()
+                .setColor(0xF1C40F)
+                .setTitle(`📊 ${targetNick}님의 전적`)
+                .addFields(
+                    { name: '승리', value: `${stats.wins}회`, inline: true },
+                    { name: '패배', value: `${stats.losses}회`, inline: true },
+                    { name: '무승부', value: `${stats.draws}회`, inline: true },
+                    { name: '승률', value: `${winRate}%`, inline: false }
+                );
+
+            await interaction.reply({ embeds: [embed] });
         }
     },
     {
@@ -451,11 +491,15 @@ const commands = [
             const teamA = items.slice(0, mid);
             const teamB = items.slice(mid);
 
-            await interaction.reply(
-                `📢 **팀 나누기 결과**\n\n` +
-                `🔴 **A팀 (${teamA.length}명)**: ${teamA.join(', ')}\n` +
-                `🔵 **B팀 (${teamB.length}명)**: ${teamB.join(', ')}`
-            );
+            const embed = new EmbedBuilder()
+                .setColor(0x3498DB)
+                .setTitle('📢 팀 나누기 결과')
+                .addFields(
+                    { name: `🔴 A팀 (${teamA.length}명)`, value: teamA.join(', ') || '없음', inline: false },
+                    { name: `🔵 B팀 (${teamB.length}명)`, value: teamB.join(', ') || '없음', inline: false }
+                );
+
+            await interaction.reply({ embeds: [embed] });
         }
     },
     {
@@ -481,7 +525,22 @@ const commands = [
                 return;
             }
 
-            await interaction.reply(`💡 **Tip: ${tip.keyword}**\n\n${tip.content}`);
+            let emote = '';
+            if (tip.category === '직업') {
+                emote = jobEmotes[tip.keyword] || '';
+            } else if (tip.category === '맵') {
+                const mapObj = maps.find(m => m.name === tip.keyword);
+                if (mapObj) {
+                    emote = `:${mapObj.emote}: `;
+                }
+            }
+
+            const embed = new EmbedBuilder()
+                .setColor(0xF39C12)
+                .setTitle(`💡 Tip: ${emote}${tip.keyword}`)
+                .setDescription(tip.content);
+
+            await interaction.reply({ embeds: [embed] });
         },
         async autocomplete(interaction) {
             const focusedValue = interaction.options.getFocused();
@@ -500,65 +559,46 @@ const commands = [
             .setDescriptionLocalizations({ 'ko': '사용 가능한 명령어 목록을 보여줍니다.' }),
         async execute(interaction) {
             const helpMessage = `
-**📖 명령어 도움말 / Command Help**
-
 **/now (지금)**
-- 현재 진행 중인 크리스탈 컨플릭트 맵 정보를 보여줍니다.
+현재 진행 중인 맵 정보 확인
 
 **/rotation (로테이션)**
-- 향후 맵 로테이션 일정을 확인합니다.
-- 옵션: \`count (개수)\`
+향후 맵 로테이션 일정 확인
 
 **/when (언제)**
-- 특정 맵이 언제 나오는지 검색합니다.
-- 옵션: \`map_name (맵이름)\`, \`count (개수)\`
+특정 맵 일정 검색
 
 **/horoscope (운세)**
-- 오늘의 별자리 운세를 확인합니다. (FF14 테마)
-- 옵션: \`sign (별자리)\`
+오늘의 별자리 운세 확인
 
 **/recommend (직업추천)**
-- 무작위로 PvP 직업을 추천해줍니다.
-- 옵션: \`count (개수)\`
+PvP 직업 추천 (단일/연속)
 
 **/dice (주사위)**
-- 주사위를 굴립니다. 기본값 1-999.
-- 옵션: \`range (범위)\`
+주사위 굴리기 (범위 지정 가능)
 
 **/duel (결투)**
-- 상대방과 주사위 결투를 합니다.
-- 옵션: \`target (상대방)\`
+주사위 결투 미니게임
 
 **/stats (전적)**
-- 결투 전적을 확인합니다.
-- 옵션: \`target (대상)\`
+결투 전적 확인
 
 **/team (팀)**
-- 인원 또는 이름을 두 팀으로 나눕니다.
-- 옵션: \`count (인원)\` 또는 \`names (이름 목록)\`
+팀 나누기 (인원/이름)
 
 **/tip (팁)**
-- 유용한 팁을 검색합니다.
-- 옵션: \`keyword (키워드)\`
-
-**/help (도움말)**
-- 이 도움말을 표시합니다.
+유용한 팁 검색
             `.trim();
-            await interaction.reply({ content: helpMessage, ephemeral: true });
+
+            const embed = new EmbedBuilder()
+                .setColor(0x0099FF)
+                .setTitle('📖 명령어 도움말')
+                .setDescription(helpMessage)
+                .setFooter({ text: 'CC-Map Bot' });
+
+            await interaction.reply({ embeds: [embed], ephemeral: true });
         }
     }
 ];
-
-function formatRotationMessage(rotation) {
-    const { current, next } = rotation;
-    const timeOption = { hour: '2-digit', minute: '2-digit' };
-    return [
-        `**[현재 맵]** :${current.map.emote}: ${current.map.name}`,
-        `🕒 종료 시간: ${current.endTime.toLocaleTimeString('ko-KR', timeOption)}`,
-        '',
-        `**[다음 맵]** :${next.map.emote}: ${next.map.name}`,
-        `🕒 시작 시간: ${next.startTime.toLocaleTimeString('ko-KR', timeOption)}`
-    ].join('\n');
-}
 
 export default commands;
