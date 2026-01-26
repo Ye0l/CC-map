@@ -200,7 +200,7 @@ export async function getDailyJobRecommendation() {
     const recommendations = JSON.parse(jsonStr);
 
     // 트랜잭션으로 일괄 저장
-    const insert = db.prepare('INSERT INTO daily_job_recommendations (date, job_name, comment) VALUES (@date, @job_name, @comment)');
+    const insert = db.prepare('INSERT OR IGNORE INTO daily_job_recommendations (date, job_name, comment) VALUES (@date, @job_name, @comment)');
     const insertMany = db.transaction((data) => {
       for (const [jobName, comment] of Object.entries(data)) {
         insert.run({ date, job_name: jobName, comment });
