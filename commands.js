@@ -1,6 +1,6 @@
 import { SlashCommandBuilder } from 'discord.js';
 import { getCurrentRotation, generateRotationSeed, getNextMapSchedules, maps } from './mapRotation.js';
-import { zodiacSigns, getDailyHoroscope } from './horoscope.js';
+import { zodiacSigns, getDailyHoroscope, getDailyJobRecommendation } from './horoscope.js';
 import db from './db.js';
 
 /**
@@ -170,16 +170,13 @@ const commands = [
             .setName('직업추천')
             .setDescription('무작위로 직업 하나를 추천해줍니다.'),
         async execute(interaction) {
+            await interaction.deferReply();
             try {
-                const row = db.prepare('SELECT name FROM job_seeds ORDER BY RANDOM() LIMIT 1').get();
-                if (!row) {
-                    await interaction.reply({ content: '❌ 등록된 직업이 없습니다.', ephemeral: true });
-                    return;
-                }
-                await interaction.reply(`🎲 오늘의 추천 직업은 **[${row.name}]** 입니다!`);
+                const recommendation = await getDailyJobRecommendation();
+                await interaction.editReply(`🎲 오늘의 추천 직업은 **[${recommendation.job_name}]** 입니다!\n\n${recommendation.comment}`);
             } catch (error) {
                 console.error(error);
-                await interaction.reply({ content: '직업을 추천하는 중 오류가 발생했습니다.', ephemeral: true });
+                await interaction.editReply({ content: '직업을 추천하는 중 오류가 발생했습니다.', ephemeral: true });
             }
         }
     }

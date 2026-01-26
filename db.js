@@ -40,6 +40,15 @@ const initDb = () => {
         )
     `);
 
+  // 일일 직업 추천 테이블
+  db.exec(`
+        CREATE TABLE IF NOT EXISTS daily_job_recommendations (
+            date TEXT PRIMARY KEY,
+            job_name TEXT NOT NULL,
+            comment TEXT NOT NULL
+        )
+    `);
+
   // 데이터 마이그레이션 (map_list.json -> DB)
   const count = db.prepare('SELECT COUNT(*) AS count FROM maps').get().count;
   if (count === 0) {

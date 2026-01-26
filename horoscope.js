@@ -3,7 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import db from './db.js';
-import { getHoroscopePrompt } from './horoscopePrompt.js';
+import { getHoroscopePrompt, getJobRecommendationPrompt } from './horoscopePrompt.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -130,5 +130,42 @@ async function fetchAndSaveDailyHoroscopes(date) {
   } catch (error) {
     console.error('Error fetching horoscopes:', error);
     throw error;
+  }
+}
+
+/**
+ * 오늘의 추천 직업 및 멘트 조회
+ */
+export async function getDailyJobRecommendation() {
+  const date = getTodayDateString();
+
+  // 1. DB에서 조회
+  const row = db.prepare('SELECT job_name, comment FROM daily_job_recommendations WHERE date = ?').get(date);
+  if (row) {
+    return row;
+  }
+
+  // 2. 없으면 생성
+  const jobRow = db.prepare('SELECT name FROM job_seeds ORDER BY RANDOM() LIMIT 1').get();
+  if (!jobRow) {
+    throw new Error('No jobs found in database');
+  }
+
+  const jobName = jobRow.name;
+  const prompt = getJobRecommendationPrompt(date, jobName);
+
+  try {
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const comment = response.text().trim();
+
+    // 3. DB 저장
+    db.prepare('INSERT INTO daily_job_recommendations (date, job_name, comment) VALUES (?, ?, ?)').run(date, jobName, comment);
+
+    return { job_name: jobName, comment };
+  } catch (error) {
+    console.error('Error generating job recommendation:', error);
+    // AI 실패 시 기본 멘트라도 반환
+    return { job_name: jobName, comment: `오늘의 추천 직업은 **[${jobName}]** 입니다!` };
   }
 }
