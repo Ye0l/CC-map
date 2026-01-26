@@ -9,17 +9,10 @@ import db from './db.js';
 const commands = [
     {
         data: new SlashCommandBuilder()
-            .setName('지금')
-            .setDescription('현재 활성화된 맵 정보를 보여줍니다.'),
-        async execute(interaction) {
-            const rotation = getCurrentRotation();
-            await interaction.reply(formatRotationMessage(rotation));
-        }
-    },
-    {
-        data: new SlashCommandBuilder()
             .setName('now')
-            .setDescription('Shows the currently active map information.'),
+            .setNameLocalizations({ 'ko': '지금' })
+            .setDescription('Shows the currently active map information.')
+            .setDescriptionLocalizations({ 'ko': '현재 활성화된 맵 정보를 보여줍니다.' }),
         async execute(interaction) {
             const rotation = getCurrentRotation();
             await interaction.reply(formatRotationMessage(rotation));
@@ -27,15 +20,19 @@ const commands = [
     },
     {
         data: new SlashCommandBuilder()
-            .setName('로테이션')
-            .setDescription('향후 맵 로테이션 일정을 보여줍니다.')
+            .setName('rotation')
+            .setNameLocalizations({ 'ko': '로테이션' })
+            .setDescription('Shows future map rotation schedule.')
+            .setDescriptionLocalizations({ 'ko': '향후 맵 로테이션 일정을 보여줍니다.' })
             .addIntegerOption(option =>
-                option.setName('개수')
-                    .setDescription('표시할 로테이션 개수 (최대 10개)')
+                option.setName('count')
+                    .setNameLocalizations({ 'ko': '개수' })
+                    .setDescription('Number of rotations to show (max 10)')
+                    .setDescriptionLocalizations({ 'ko': '표시할 로테이션 개수 (최대 10개)' })
                     .setAutocomplete(true)
             ),
         async execute(interaction) {
-            const count = interaction.options.getInteger('개수') || 5;
+            const count = interaction.options.getInteger('count') || 5;
             const seed = generateRotationSeed(Date.now(), Math.min(count, 10));
 
             const response = [
@@ -54,25 +51,30 @@ const commands = [
             );
         }
     },
-    // /언제 명령어
     {
         data: new SlashCommandBuilder()
-            .setName('언제')
-            .setDescription('특정 맵이 언제 나오는지 알려줍니다.')
+            .setName('when')
+            .setNameLocalizations({ 'ko': '언제' })
+            .setDescription('Check when a specific map is coming up.')
+            .setDescriptionLocalizations({ 'ko': '특정 맵이 언제 나오는지 알려줍니다.' })
             .addStringOption(option =>
-                option.setName('맵이름')
-                    .setDescription('검색할 맵 이름')
+                option.setName('map_name')
+                    .setNameLocalizations({ 'ko': '맵이름' })
+                    .setDescription('Name of the map to search')
+                    .setDescriptionLocalizations({ 'ko': '검색할 맵 이름' })
                     .setRequired(true)
                     .setAutocomplete(true)
             )
             .addIntegerOption(option =>
-                option.setName('개수')
-                    .setDescription('표시할 시간표 개수')
+                option.setName('count')
+                    .setNameLocalizations({ 'ko': '개수' })
+                    .setDescription('Number of schedules to show')
+                    .setDescriptionLocalizations({ 'ko': '표시할 시간표 개수' })
                     .setRequired(false)
             ),
         async execute(interaction) {
-            const mapName = interaction.options.getString('맵이름');
-            const count = interaction.options.getInteger('개수') || 1;
+            const mapName = interaction.options.getString('map_name');
+            const count = interaction.options.getInteger('count') || 1;
             const schedules = getNextMapSchedules(mapName, count);
 
             if (schedules.length === 0) {
@@ -111,21 +113,24 @@ const commands = [
             );
         }
     },
-    // /운세 명령어
     {
         data: new SlashCommandBuilder()
-            .setName('운세')
-            .setDescription('오늘의 별자리 운세를 확인합니다.')
+            .setName('horoscope')
+            .setNameLocalizations({ 'ko': '운세' })
+            .setDescription('Check your daily horoscope.')
+            .setDescriptionLocalizations({ 'ko': '오늘의 별자리 운세를 확인합니다.' })
             .addStringOption(option =>
-                option.setName('별자리')
-                    .setDescription('운세를 확인할 별자리')
+                option.setName('sign')
+                    .setNameLocalizations({ 'ko': '별자리' })
+                    .setDescription('Zodiac sign to check')
+                    .setDescriptionLocalizations({ 'ko': '운세를 확인할 별자리' })
                     .setRequired(true)
                     .setAutocomplete(true)
             ),
         async execute(interaction) {
-            await interaction.deferReply(); // API 호출 시간이 걸릴 수 있으므로 defer
+            await interaction.deferReply();
 
-            const sign = interaction.options.getString('별자리');
+            const sign = interaction.options.getString('sign');
             const validSigns = Object.values(zodiacSigns);
 
             if (!validSigns.includes(sign)) {
@@ -164,14 +169,17 @@ const commands = [
             );
         }
     },
-    // /직업추천 명령어
     {
         data: new SlashCommandBuilder()
-            .setName('직업추천')
-            .setDescription('무작위로 직업을 추천해줍니다.')
+            .setName('recommend')
+            .setNameLocalizations({ 'ko': '직업추천' })
+            .setDescription('Get a random job recommendation.')
+            .setDescriptionLocalizations({ 'ko': '무작위로 직업을 추천해줍니다.' })
             .addIntegerOption(option =>
-                option.setName('개수')
-                    .setDescription('추천받을 직업 개수 (1~10)')
+                option.setName('count')
+                    .setNameLocalizations({ 'ko': '개수' })
+                    .setDescription('Number of jobs to recommend (1~10)')
+                    .setDescriptionLocalizations({ 'ko': '추천받을 직업 개수 (1~10)' })
                     .setRequired(false)
                     .setMinValue(1)
                     .setMaxValue(10)
@@ -179,7 +187,7 @@ const commands = [
         async execute(interaction) {
             await interaction.deferReply();
             try {
-                const countOption = interaction.options.getInteger('개수');
+                const countOption = interaction.options.getInteger('count');
                 const isSimpleMode = countOption !== null;
                 const count = countOption || 1;
 
@@ -195,14 +203,12 @@ const commands = [
                 };
 
                 if (isSimpleMode) {
-                    // 간략 모드: "이모지 직업명, 이모지 직업명..."
                     const simpleList = recommendations.map(r => {
                         const emote = jobEmotes[r.job_name] || '';
                         return `- ${emote}**${r.job_name}**`;
                     }).join('\n');
                     await interaction.editReply(`🎲 추천 직업 연속가챠\n${simpleList}`);
                 } else {
-                    // 상세 모드: 기존 1개 상세 출력
                     const r = recommendations[0];
                     const emote = jobEmotes[r.job_name] || '';
                     await interaction.editReply(`🎲 오늘의 추천 직업은 ${emote}**${r.job_name}** 입니다!\n\n${r.comment}`);
@@ -211,6 +217,41 @@ const commands = [
                 console.error(error);
                 await interaction.editReply({ content: '직업을 추천하는 중 오류가 발생했습니다.', ephemeral: true });
             }
+        }
+    },
+    {
+        data: new SlashCommandBuilder()
+            .setName('help')
+            .setNameLocalizations({ 'ko': '도움말' })
+            .setDescription('Shows list of available commands.')
+            .setDescriptionLocalizations({ 'ko': '사용 가능한 명령어 목록을 보여줍니다.' }),
+        async execute(interaction) {
+            const helpMessage = `
+**📖 명령어 도움말 / Command Help**
+
+**/now (지금)**
+- 현재 진행 중인 크리스탈 컨플릭트 맵 정보를 보여줍니다.
+
+**/rotation (로테이션)**
+- 향후 맵 로테이션 일정을 확인합니다.
+- 옵션: \`count (개수)\` - 표시할 일정 개수
+
+**/when (언제)**
+- 특정 맵이 언제 나오는지 검색합니다.
+- 옵션: \`map_name (맵이름)\`, \`count (개수)\`
+
+**/horoscope (운세)**
+- 오늘의 별자리 운세를 확인합니다. (FF14 테마)
+- 옵션: \`sign (별자리)\`
+
+**/recommend (직업추천)**
+- 무작위로 PvP 직업을 추천해줍니다.
+- 옵션: \`count (개수)\` - 간략하게 여러 직업 추천
+
+**/help (도움말)**
+- 이 도움말을 표시합니다.
+            `.trim();
+            await interaction.reply({ content: helpMessage, ephemeral: true });
         }
     }
 ];
