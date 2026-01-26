@@ -152,7 +152,34 @@ export async function getDailyJobRecommendation() {
   }
 
   const jobName = jobRow.name;
-  const prompt = getJobRecommendationPrompt(date, jobName);
+
+  // 스킬 정보 가져오기 및 정제
+  let skillDataText = '';
+  try {
+    const skillsPath = path.join(__dirname, 'ff14_pvp_skills.json');
+    if (fs.existsSync(skillsPath)) {
+      const skills = JSON.parse(fs.readFileSync(skillsPath, 'utf8'));
+      const jobSkills = skills[jobName];
+      if (jobSkills) {
+        skillDataText = jobSkills.map(s => {
+          let effect = s.effect.replace(/\n/g, ' ');
+          effect = effect.replace(/위력: \d+~?\d*/g, '');
+          effect = effect.replace(/회복력: \d+~?\d*/g, '');
+          effect = effect.replace(/지속 회복력: \d+/g, '');
+          effect = effect.replace(/지속 피해 위력: \d+/g, '');
+          effect = effect.replace(/※.*?입니다\./g, '');
+          effect = effect.replace(/※.*?변화합니다\./g, '');
+          effect = effect.replace(/※ 이 기술은 단축바에 등록할 수 없습니다\./g, '');
+          effect = effect.replace(/\s+/g, ' ').trim();
+          return `**${s.name}**: ${effect}`;
+        }).join(' | ');
+      }
+    }
+  } catch (e) {
+    console.error("Error reading skills for recommendation:", e);
+  }
+
+  const prompt = getJobRecommendationPrompt(date, jobName, skillDataText);
 
   try {
     const result = await model.generateContent(prompt);
