@@ -183,7 +183,7 @@ const commands = [
                 };
 
                 const emote = jobEmotes[recommendation.job_name] || '';
-                await interaction.editReply(`🎲 오늘의 추천 직업은 ${emote} **[${recommendation.job_name}]** 입니다!\n\n${recommendation.comment}`);
+                await interaction.editReply(`🎲 오늘의 추천 직업은 ${emote}**${recommendation.job_name}** 입니다!\n\n${recommendation.comment}`);
             } catch (error) {
                 console.error(error);
                 await interaction.editReply({ content: '직업을 추천하는 중 오류가 발생했습니다.', ephemeral: true });
