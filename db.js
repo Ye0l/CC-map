@@ -43,9 +43,10 @@ const initDb = () => {
   // 일일 직업 추천 테이블
   db.exec(`
         CREATE TABLE IF NOT EXISTS daily_job_recommendations (
-            date TEXT PRIMARY KEY,
-            job_name TEXT NOT NULL,
-            comment TEXT NOT NULL
+            date TEXT,
+            job_name TEXT,
+            comment TEXT NOT NULL,
+            PRIMARY KEY (date, job_name)
         )
     `);
 

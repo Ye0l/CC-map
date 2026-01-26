@@ -3,7 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import db from './db.js';
-import { getHoroscopePrompt, getJobRecommendationPrompt } from './horoscopePrompt.js';
+import { getHoroscopePrompt, getAllJobsRecommendationPrompt } from './horoscopePrompt.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -134,34 +134,41 @@ async function fetchAndSaveDailyHoroscopes(date) {
 }
 
 /**
- * 오늘의 추천 직업 및 멘트 조회
+ * 오늘의 추천 직업 및 멘트 조회 (일괄 생성 및 랜덤 반환)
  */
 export async function getDailyJobRecommendation() {
   const date = getTodayDateString();
 
-  // 1. DB에서 조회
-  const row = db.prepare('SELECT job_name, comment FROM daily_job_recommendations WHERE date = ?').get(date);
-  if (row) {
+  // 1. 오늘 날짜의 데이터가 있는지 확인 (아무거나 하나만 조회해도 됨)
+  const count = db.prepare('SELECT COUNT(*) as count FROM daily_job_recommendations WHERE date = ?').get(date).count;
+
+  // 2. 데이터가 있으면 랜덤으로 하나 뽑아서 반환
+  if (count > 0) {
+    const row = db.prepare('SELECT job_name, comment FROM daily_job_recommendations WHERE date = ? ORDER BY RANDOM() LIMIT 1').get(date);
     return row;
   }
 
-  // 2. 없으면 생성
-  const jobRow = db.prepare('SELECT name FROM job_seeds ORDER BY RANDOM() LIMIT 1').get();
-  if (!jobRow) {
+  // 3. 데이터가 없으면 일괄 생성 (Batch Generation)
+  console.log(`Generating daily job recommendations for ${date}...`);
+
+  // 모든 직업 목록 가져오기
+  const jobs = db.prepare('SELECT name FROM job_seeds').all().map(r => r.name);
+  if (jobs.length === 0) {
     throw new Error('No jobs found in database');
   }
 
-  const jobName = jobRow.name;
-
-  // 스킬 정보 가져오기 및 정제
-  let skillDataText = '';
+  // 전체 직업 스킬 데이터 준비
+  let allSkillData = '';
   try {
     const skillsPath = path.join(__dirname, 'ff14_pvp_skills.json');
     if (fs.existsSync(skillsPath)) {
       const skills = JSON.parse(fs.readFileSync(skillsPath, 'utf8'));
-      const jobSkills = skills[jobName];
-      if (jobSkills) {
-        skillDataText = jobSkills.map(s => {
+
+      allSkillData = jobs.map(job => {
+        const jobSkills = skills[job];
+        if (!jobSkills) return '';
+
+        const skillTexts = jobSkills.map(s => {
           let effect = s.effect.replace(/\n/g, ' ');
           effect = effect.replace(/위력: \d+~?\d*/g, '');
           effect = effect.replace(/회복력: \d+~?\d*/g, '');
@@ -173,26 +180,43 @@ export async function getDailyJobRecommendation() {
           effect = effect.replace(/\s+/g, ' ').trim();
           return `**${s.name}**: ${effect}`;
         }).join(' | ');
-      }
+
+        return `### ${job}\n${skillTexts}`;
+      }).join('\n\n');
     }
   } catch (e) {
     console.error("Error reading skills for recommendation:", e);
   }
 
-  const prompt = getJobRecommendationPrompt(date, jobName, skillDataText);
+  const prompt = getAllJobsRecommendationPrompt(date, allSkillData);
 
   try {
     const result = await model.generateContent(prompt);
     const response = await result.response;
-    const comment = response.text().trim();
+    const text = response.text().trim();
 
-    // 3. DB 저장
-    db.prepare('INSERT INTO daily_job_recommendations (date, job_name, comment) VALUES (?, ?, ?)').run(date, jobName, comment);
+    // JSON 파싱
+    const jsonStr = text.replace(/```json/g, '').replace(/```/g, '').trim();
+    const recommendations = JSON.parse(jsonStr);
 
-    return { job_name: jobName, comment };
+    // 트랜잭션으로 일괄 저장
+    const insert = db.prepare('INSERT INTO daily_job_recommendations (date, job_name, comment) VALUES (@date, @job_name, @comment)');
+    const insertMany = db.transaction((data) => {
+      for (const [jobName, comment] of Object.entries(data)) {
+        insert.run({ date, job_name: jobName, comment });
+      }
+    });
+
+    insertMany(recommendations);
+
+    // 저장 후 하나 랜덤 반환
+    const row = db.prepare('SELECT job_name, comment FROM daily_job_recommendations WHERE date = ? ORDER BY RANDOM() LIMIT 1').get(date);
+    return row || { job_name: jobs[0], comment: "추천 생성 완료! 다시 시도헤주세요." };
+
   } catch (error) {
     console.error('Error generating job recommendation:', error);
-    // AI 실패 시 기본 멘트라도 반환
-    return { job_name: jobName, comment: `오늘의 추천 직업은 **[${jobName}]** 입니다!` };
+    // AI 실패 시 기본 멘트 반환
+    const randomJob = jobs[Math.floor(Math.random() * jobs.length)];
+    return { job_name: randomJob, comment: `오늘의 추천 직업은 **[${randomJob}]** 입니다! (AI 생성 실패)` };
   }
 }
