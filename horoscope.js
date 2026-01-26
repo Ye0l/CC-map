@@ -136,87 +136,85 @@ async function fetchAndSaveDailyHoroscopes(date) {
 /**
  * 오늘의 추천 직업 및 멘트 조회 (일괄 생성 및 랜덤 반환)
  */
-export async function getDailyJobRecommendation() {
+export async function getDailyJobRecommendation(count = 1) {
   const date = getTodayDateString();
 
   // 1. 오늘 날짜의 데이터가 있는지 확인 (아무거나 하나만 조회해도 됨)
-  const count = db.prepare('SELECT COUNT(*) as count FROM daily_job_recommendations WHERE date = ?').get(date).count;
+  const existingCount = db.prepare('SELECT COUNT(*) as count FROM daily_job_recommendations WHERE date = ?').get(date).count;
 
-  // 2. 데이터가 있으면 랜덤으로 하나 뽑아서 반환
-  if (count > 0) {
-    const row = db.prepare('SELECT job_name, comment FROM daily_job_recommendations WHERE date = ? ORDER BY RANDOM() LIMIT 1').get(date);
-    return row;
-  }
+  // 2. 데이터가 없으면 일괄 생성 (Batch Generation)
+  if (existingCount === 0) {
+    console.log(`Generating daily job recommendations for ${date}...`);
 
-  // 3. 데이터가 없으면 일괄 생성 (Batch Generation)
-  console.log(`Generating daily job recommendations for ${date}...`);
-
-  // 모든 직업 목록 가져오기
-  const jobs = db.prepare('SELECT name FROM job_seeds').all().map(r => r.name);
-  if (jobs.length === 0) {
-    throw new Error('No jobs found in database');
-  }
-
-  // 전체 직업 스킬 데이터 준비
-  let allSkillData = '';
-  try {
-    const skillsPath = path.join(__dirname, 'ff14_pvp_skills.json');
-    if (fs.existsSync(skillsPath)) {
-      const skills = JSON.parse(fs.readFileSync(skillsPath, 'utf8'));
-
-      allSkillData = jobs.map(job => {
-        const jobSkills = skills[job];
-        if (!jobSkills) return '';
-
-        const skillTexts = jobSkills.map(s => {
-          let effect = s.effect.replace(/\n/g, ' ');
-          effect = effect.replace(/위력: \d+~?\d*/g, '');
-          effect = effect.replace(/회복력: \d+~?\d*/g, '');
-          effect = effect.replace(/지속 회복력: \d+/g, '');
-          effect = effect.replace(/지속 피해 위력: \d+/g, '');
-          effect = effect.replace(/※.*?입니다\./g, '');
-          effect = effect.replace(/※.*?변화합니다\./g, '');
-          effect = effect.replace(/※ 이 기술은 단축바에 등록할 수 없습니다\./g, '');
-          effect = effect.replace(/\s+/g, ' ').trim();
-          return `**${s.name}**: ${effect}`;
-        }).join(' | ');
-
-        return `### ${job}\n${skillTexts}`;
-      }).join('\n\n');
+    // 모든 직업 목록 가져오기
+    const jobs = db.prepare('SELECT name FROM job_seeds').all().map(r => r.name);
+    if (jobs.length === 0) {
+      throw new Error('No jobs found in database');
     }
-  } catch (e) {
-    console.error("Error reading skills for recommendation:", e);
-  }
 
-  const prompt = getAllJobsRecommendationPrompt(date, allSkillData);
+    // 전체 직업 스킬 데이터 준비
+    let allSkillData = '';
+    try {
+      const skillsPath = path.join(__dirname, 'ff14_pvp_skills.json');
+      if (fs.existsSync(skillsPath)) {
+        const skills = JSON.parse(fs.readFileSync(skillsPath, 'utf8'));
 
-  try {
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    const text = response.text().trim();
+        allSkillData = jobs.map(job => {
+          const jobSkills = skills[job];
+          if (!jobSkills) return '';
 
-    // JSON 파싱
-    const jsonStr = text.replace(/```json/g, '').replace(/```/g, '').trim();
-    const recommendations = JSON.parse(jsonStr);
+          const skillTexts = jobSkills.map(s => {
+            let effect = s.effect.replace(/\n/g, ' ');
+            effect = effect.replace(/위력: \d+~?\d*/g, '');
+            effect = effect.replace(/회복력: \d+~?\d*/g, '');
+            effect = effect.replace(/지속 회복력: \d+/g, '');
+            effect = effect.replace(/지속 피해 위력: \d+/g, '');
+            effect = effect.replace(/※.*?입니다\./g, '');
+            effect = effect.replace(/※.*?변화합니다\./g, '');
+            effect = effect.replace(/※ 이 기술은 단축바에 등록할 수 없습니다\./g, '');
+            effect = effect.replace(/\s+/g, ' ').trim();
+            return `**${s.name}**: ${effect}`;
+          }).join(' | ');
 
-    // 트랜잭션으로 일괄 저장
-    const insert = db.prepare('INSERT OR IGNORE INTO daily_job_recommendations (date, job_name, comment) VALUES (@date, @job_name, @comment)');
-    const insertMany = db.transaction((data) => {
-      for (const [jobName, comment] of Object.entries(data)) {
-        insert.run({ date, job_name: jobName, comment });
+          return `### ${job}\n${skillTexts}`;
+        }).join('\n\n');
       }
-    });
+    } catch (e) {
+      console.error("Error reading skills for recommendation:", e);
+    }
 
-    insertMany(recommendations);
+    const prompt = getAllJobsRecommendationPrompt(date, allSkillData);
 
-    // 저장 후 하나 랜덤 반환
-    const row = db.prepare('SELECT job_name, comment FROM daily_job_recommendations WHERE date = ? ORDER BY RANDOM() LIMIT 1').get(date);
-    return row || { job_name: jobs[0], comment: "추천 생성 완료! 다시 시도헤주세요." };
+    try {
+      const result = await model.generateContent(prompt);
+      const response = await result.response;
+      const text = response.text().trim();
 
-  } catch (error) {
-    console.error('Error generating job recommendation:', error);
-    // AI 실패 시 기본 멘트 반환
-    const randomJob = jobs[Math.floor(Math.random() * jobs.length)];
-    return { job_name: randomJob, comment: `오늘의 추천 직업은 **[${randomJob}]** 입니다! (AI 생성 실패)` };
+      // JSON 파싱
+      const jsonStr = text.replace(/```json/g, '').replace(/```/g, '').trim();
+      const recommendations = JSON.parse(jsonStr);
+
+      // 트랜잭션으로 일괄 저장
+      const insert = db.prepare('INSERT OR IGNORE INTO daily_job_recommendations (date, job_name, comment) VALUES (@date, @job_name, @comment)');
+      const insertMany = db.transaction((data) => {
+        for (const [jobName, comment] of Object.entries(data)) {
+          insert.run({ date, job_name: jobName, comment });
+        }
+      });
+
+      insertMany(recommendations);
+
+    } catch (error) {
+      console.error('Error generating job recommendation:', error);
+      // AI 실패 시 기본 데이터라도 반환하기 위해 여기서 에러 처리하지 않고 아래 리턴 로직으로 흐르게 함
+    }
   }
+
+  // 3. 요청 개수만큼 랜덤으로 뽑아서 반환
+  const rows = db.prepare('SELECT job_name, comment FROM daily_job_recommendations WHERE date = ? ORDER BY RANDOM() LIMIT ?').all(date, count);
+
+  if (count === 1) {
+    return rows[0] || { job_name: "나이트", comment: "직업을 가져오지 못했습니다. 다시 시도해주세요." };
+  }
+  return rows;
 }

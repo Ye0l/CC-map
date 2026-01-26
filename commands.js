@@ -168,11 +168,23 @@ const commands = [
     {
         data: new SlashCommandBuilder()
             .setName('직업추천')
-            .setDescription('무작위로 직업 하나를 추천해줍니다.'),
+            .setDescription('무작위로 직업을 추천해줍니다.')
+            .addIntegerOption(option =>
+                option.setName('개수')
+                    .setDescription('추천받을 직업 개수 (1~10)')
+                    .setRequired(false)
+                    .setMinValue(1)
+                    .setMaxValue(10)
+            ),
         async execute(interaction) {
             await interaction.deferReply();
             try {
-                const recommendation = await getDailyJobRecommendation();
+                const countOption = interaction.options.getInteger('개수');
+                const isSimpleMode = countOption !== null;
+                const count = countOption || 1;
+
+                const results = await getDailyJobRecommendation(count);
+                const recommendations = Array.isArray(results) ? results : [results];
 
                 const jobEmotes = {
                     '나이트': '<:PLD:1465245862363136145>', '전사': '<:WAR:1465245785934528574>', '암흑기사': '<:DRK:1465245768989540467>', '건브레이커': '<:GNB:1465245757803335680>',
@@ -182,8 +194,19 @@ const commands = [
                     '흑마도사': '<:BLM:1465245782004334666>', '소환사': '<:SMN:1465245774890799290>', '적마도사': '<:RDM:1465245765373923536>', '픽토맨서': '<:PCT:1465245748588187825>'
                 };
 
-                const emote = jobEmotes[recommendation.job_name] || '';
-                await interaction.editReply(`🎲 오늘의 추천 직업은 ${emote}**${recommendation.job_name}** 입니다!\n\n${recommendation.comment}`);
+                if (isSimpleMode) {
+                    // 간략 모드: "이모지 직업명, 이모지 직업명..."
+                    const simpleList = recommendations.map(r => {
+                        const emote = jobEmotes[r.job_name] || '';
+                        return `${emote}**${r.job_name}**`;
+                    }).join('\n');
+                    await interaction.editReply(`🎲 추천 직업: ${simpleList}`);
+                } else {
+                    // 상세 모드: 기존 1개 상세 출력
+                    const r = recommendations[0];
+                    const emote = jobEmotes[r.job_name] || '';
+                    await interaction.editReply(`🎲 오늘의 추천 직업은 ${emote}**${r.job_name}** 입니다!\n\n${r.comment}`);
+                }
             } catch (error) {
                 console.error(error);
                 await interaction.editReply({ content: '직업을 추천하는 중 오류가 발생했습니다.', ephemeral: true });
