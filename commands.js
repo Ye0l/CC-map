@@ -173,7 +173,17 @@ const commands = [
             await interaction.deferReply();
             try {
                 const recommendation = await getDailyJobRecommendation();
-                await interaction.editReply(`🎲 오늘의 추천 직업은 **[${recommendation.job_name}]** 입니다!\n\n${recommendation.comment}`);
+
+                const jobEmotes = {
+                    '나이트': 'PLD', '전사': 'WAR', '암흑기사': 'DRK', '건브레이커': 'GNB',
+                    '백마도사': 'WHM', '학자': 'SCH', '점성술사': 'AST', '현자': 'SGE',
+                    '몽크': 'MNK', '용기사': 'DRG', '닌자': 'NIN', '사무라이': 'SAM', '리퍼': 'RPR', '바이퍼': 'VPR',
+                    '음유시인': 'BRD', '기공사': 'MCH', '무도가': 'DNC',
+                    '흑마도사': 'BLM', '소환사': 'SMN', '적마도사': 'RDM', '픽토맨서': 'PCT'
+                };
+
+                const emote = jobEmotes[recommendation.job_name] ? `:${jobEmotes[recommendation.job_name]}:` : '';
+                await interaction.editReply(`🎲 오늘의 추천 직업은 ${emote} **[${recommendation.job_name}]** 입니다!\n\n${recommendation.comment}`);
             } catch (error) {
                 console.error(error);
                 await interaction.editReply({ content: '직업을 추천하는 중 오류가 발생했습니다.', ephemeral: true });
