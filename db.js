@@ -32,6 +32,14 @@ const initDb = () => {
         )
     `);
 
+  // 직업 시드 테이블
+  db.exec(`
+        CREATE TABLE IF NOT EXISTS job_seeds (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT UNIQUE NOT NULL
+        )
+    `);
+
   // 데이터 마이그레이션 (map_list.json -> DB)
   const count = db.prepare('SELECT COUNT(*) AS count FROM maps').get().count;
   if (count === 0) {
@@ -51,6 +59,29 @@ const initDb = () => {
       console.log(`Migrated ${maps.length} maps.`);
     } else {
       console.warn('map_list.json not found. Database is empty.');
+    }
+  }
+
+  // 데이터 마이그레이션 (ff14_pvp_skills.json -> job_seeds)
+  const jobCount = db.prepare('SELECT COUNT(*) AS count FROM job_seeds').get().count;
+  if (jobCount === 0) {
+    console.log('Migrating data from ff14_pvp_skills.json...');
+    const skillPath = path.join(__dirname, 'ff14_pvp_skills.json');
+    if (fs.existsSync(skillPath)) {
+      const skills = JSON.parse(fs.readFileSync(skillPath, 'utf8'));
+      const jobs = Object.keys(skills); // 직업 이름만 추출
+
+      const insert = db.prepare('INSERT OR IGNORE INTO job_seeds (name) VALUES (?)');
+      const insertMany = db.transaction((jobList) => {
+        for (const job of jobList) {
+          insert.run(job);
+        }
+      });
+
+      insertMany(jobs);
+      console.log(`Migrated ${jobs.length} jobs into job_seeds.`);
+    } else {
+      console.warn('ff14_pvp_skills.json not found. Job seeds skipped.');
     }
   }
 };

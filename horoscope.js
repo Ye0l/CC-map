@@ -29,7 +29,7 @@ export const zodiacSigns = {
   'Pisces': '물고기자리'
 };
 
-const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
+const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
 
 /**
  * 오늘 날짜 문자열 반환 (YYYY-MM-DD, 한국 시간 기준)
@@ -76,7 +76,38 @@ async function fetchAndSaveDailyHoroscopes(date) {
   console.log(`Fetching horoscopes for ${date}...`);
 
   try {
-    const prompt = getHoroscopePrompt(date);
+    // 0. DB에서 직업 시드 가져오기 및 셔플 (랜덤 중복 방지)
+    const jobs = db.prepare('SELECT name FROM job_seeds').all().map(r => r.name);
+    if (jobs.length === 0) {
+      throw new Error('No job seeds found in database.');
+    }
+
+    // 날짜 기반 시드 생성 (단순 해시)
+    let seed = 0;
+    for (let i = 0; i < date.length; i++) {
+      seed = (seed * 31 + date.charCodeAt(i)) | 0;
+    }
+
+    // Fisher-Yates Shuffle with Seed
+    const shuffledJobs = [...jobs];
+    for (let i = shuffledJobs.length - 1; i > 0; i--) {
+      const x = Math.sin(seed++) * 10000;
+      const rand = x - Math.floor(x);
+      const j = Math.floor(rand * (i + 1));
+      [shuffledJobs[i], shuffledJobs[j]] = [shuffledJobs[j], shuffledJobs[i]];
+    }
+
+    // 별자리에 직업 할당 (직업 수가 별자리 수보다 적으면 반복 사용)
+    const signKeys = Object.keys(zodiacSigns);
+    const jobAssignments = {};
+
+    signKeys.forEach((signKey, index) => {
+      const signName = zodiacSigns[signKey]; // 한글명 (ex: 양자리)
+      const job = shuffledJobs[index % shuffledJobs.length];
+      jobAssignments[signKey] = job; // 영문 키 -> 직업
+    });
+
+    const prompt = getHoroscopePrompt(date, jobAssignments);
     const result = await model.generateContent(prompt);
     const response = await result.response;
     const text = response.text();
