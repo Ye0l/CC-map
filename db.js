@@ -50,6 +50,26 @@ const initDb = () => {
         )
     `);
 
+  // 결투 전적 테이블
+  db.exec(`
+        CREATE TABLE IF NOT EXISTS duel_stats (
+            user_id TEXT PRIMARY KEY,
+            wins INTEGER DEFAULT 0,
+            losses INTEGER DEFAULT 0,
+            draws INTEGER DEFAULT 0
+        )
+    `);
+
+  // 팁 데이터 테이블
+  db.exec(`
+        CREATE TABLE IF NOT EXISTS tips (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            category TEXT,
+            keyword TEXT NOT NULL,
+            content TEXT NOT NULL
+        )
+    `);
+
   // 데이터 마이그레이션 (map_list.json -> DB)
   const count = db.prepare('SELECT COUNT(*) AS count FROM maps').get().count;
   if (count === 0) {

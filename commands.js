@@ -221,6 +221,186 @@ const commands = [
     },
     {
         data: new SlashCommandBuilder()
+            .setName('dice')
+            .setNameLocalizations({ 'ko': '주사위' })
+            .setDescription('Roll a dice.')
+            .setDescriptionLocalizations({ 'ko': '주사위를 굴립니다.' })
+            .addStringOption(option =>
+                option.setName('range')
+                    .setNameLocalizations({ 'ko': '범위' })
+                    .setDescription('Range of the dice (e.g. 1-100)')
+                    .setDescriptionLocalizations({ 'ko': '주사위 범위 (예: 1-100)' })
+                    .setRequired(false)
+            ),
+        async execute(interaction) {
+            const rangeStr = interaction.options.getString('range') || '1-999';
+            let min = 1, max = 999;
+
+            const parts = rangeStr.split('-');
+            if (parts.length === 2) {
+                const p1 = parseInt(parts[0]);
+                const p2 = parseInt(parts[1]);
+                if (!isNaN(p1) && !isNaN(p2)) {
+                    min = Math.min(p1, p2);
+                    max = Math.max(p1, p2);
+                }
+            } else if (parts.length === 1) {
+                const p1 = parseInt(parts[0]);
+                if (!isNaN(p1)) max = p1;
+            }
+
+            const result = Math.floor(Math.random() * (max - min + 1)) + min;
+            await interaction.reply(`🎲 **주사위 굴리기!** (${min}-${max})\n결과: **${result}**`);
+        }
+    },
+    {
+        data: new SlashCommandBuilder()
+            .setName('duel')
+            .setNameLocalizations({ 'ko': '결투' })
+            .setDescription('Challenge someone to a duel.')
+            .setDescriptionLocalizations({ 'ko': '누군가에게 결투를 신청합니다.' })
+            .addUserOption(option =>
+                option.setName('target')
+                    .setNameLocalizations({ 'ko': '상대방' })
+                    .setDescription('User to challenge')
+                    .setDescriptionLocalizations({ 'ko': '결투할 상대방' })
+                    .setRequired(true)
+            ),
+        async execute(interaction) {
+            const target = interaction.options.getUser('target');
+            const user = interaction.user;
+
+            if (target.id === user.id) {
+                await interaction.reply({ content: '자기 자신과는 결투할 수 없습니다!', ephemeral: true });
+                return;
+            }
+            if (target.bot) {
+                await interaction.reply({ content: '봇과는 결투할 수 없습니다. (너무 강하거든요!)', ephemeral: true });
+                return;
+            }
+
+            const userRoll = Math.floor(Math.random() * 100) + 1;
+            const targetRoll = Math.floor(Math.random() * 100) + 1;
+
+            let resultMsg = '';
+            let winnerId = null;
+            let loserId = null;
+            let isDraw = false;
+
+            if (userRoll > targetRoll) {
+                resultMsg = `🏆 **${user.username} 승리!**`;
+                winnerId = user.id;
+                loserId = target.id;
+            } else if (targetRoll > userRoll) {
+                resultMsg = `🏆 **${target.username} 승리!**`;
+                winnerId = target.id;
+                loserId = user.id;
+            } else {
+                resultMsg = '🤝 **무승부!**';
+                isDraw = true;
+            }
+
+            const response = [
+                `⚔️ **결투 발생!** ⚔️`,
+                `${user.username} 🎲 ${userRoll}  vs  ${targetRoll} 🎲 ${target.username}`,
+                '',
+                resultMsg
+            ].join('\n');
+
+            // DB 업데이트 함수
+            const updateStats = (id, result) => {
+                const stats = db.prepare('SELECT * FROM duel_stats WHERE user_id = ?').get(id) || { wins: 0, losses: 0, draws: 0 };
+                if (result === 'win') stats.wins++;
+                else if (result === 'loss') stats.losses++;
+                else if (result === 'draw') stats.draws++;
+
+                db.prepare(`
+                    INSERT OR REPLACE INTO duel_stats (user_id, wins, losses, draws)
+                    VALUES (?, ?, ?, ?)
+                `).run(id, stats.wins, stats.losses, stats.draws);
+            };
+
+            if (isDraw) {
+                updateStats(user.id, 'draw');
+                updateStats(target.id, 'draw');
+            } else {
+                updateStats(winnerId, 'win');
+                updateStats(loserId, 'loss');
+            }
+
+            await interaction.reply(response);
+        }
+    },
+    {
+        data: new SlashCommandBuilder()
+            .setName('stats')
+            .setNameLocalizations({ 'ko': '전적' })
+            .setDescription('Check duel stats.')
+            .setDescriptionLocalizations({ 'ko': '결투 전적을 확인합니다.' })
+            .addUserOption(option =>
+                option.setName('target')
+                    .setNameLocalizations({ 'ko': '대상' })
+                    .setDescription('User to check')
+                    .setDescriptionLocalizations({ 'ko': '전적을 확인할 대상' })
+                    .setRequired(false)
+            ),
+        async execute(interaction) {
+            const target = interaction.options.getUser('target') || interaction.user;
+            const stats = db.prepare('SELECT * FROM duel_stats WHERE user_id = ?').get(target.id);
+
+            if (!stats) {
+                await interaction.reply(`${target.username}님은 아직 결투 기록이 없습니다.`);
+                return;
+            }
+
+            const total = stats.wins + stats.losses + stats.draws;
+            const winRate = total > 0 ? ((stats.wins / total) * 100).toFixed(1) : 0;
+
+            await interaction.reply({
+                content: `📊 **${target.username}님의 전적**\n\n` +
+                    `🟢 승리: ${stats.wins}회\n` +
+                    `🔴 패배: ${stats.losses}회\n` +
+                    `⚪ 무승부: ${stats.draws}회\n` +
+                    `🔥 승률: ${winRate}%`
+            });
+        }
+    },
+    {
+        data: new SlashCommandBuilder()
+            .setName('tip')
+            .setNameLocalizations({ 'ko': '팁' })
+            .setDescription('Get useful tips.')
+            .setDescriptionLocalizations({ 'ko': '유용한 팁을 확인합니다.' })
+            .addStringOption(option =>
+                option.setName('keyword')
+                    .setNameLocalizations({ 'ko': '키워드' })
+                    .setDescription('Keyword to search')
+                    .setDescriptionLocalizations({ 'ko': '검색할 팁 키워드' })
+                    .setRequired(true)
+                    .setAutocomplete(true)
+            ),
+        async execute(interaction) {
+            const keyword = interaction.options.getString('keyword');
+            const tip = db.prepare('SELECT * FROM tips WHERE keyword = ?').get(keyword);
+
+            if (!tip) {
+                await interaction.reply({ content: `❌ '${keyword}'에 대한 팁을 찾을 수 없습니다.`, ephemeral: true });
+                return;
+            }
+
+            await interaction.reply(`💡 **Tip: ${tip.keyword}**\n\n${tip.content}`);
+        },
+        async autocomplete(interaction) {
+            const focusedValue = interaction.options.getFocused();
+            const tips = db.prepare('SELECT keyword FROM tips WHERE keyword LIKE ? LIMIT 25').all(`%${focusedValue}%`);
+
+            await interaction.respond(
+                tips.map(t => ({ name: t.keyword, value: t.keyword }))
+            );
+        }
+    },
+    {
+        data: new SlashCommandBuilder()
             .setName('help')
             .setNameLocalizations({ 'ko': '도움말' })
             .setDescription('Shows list of available commands.')
@@ -234,7 +414,7 @@ const commands = [
 
 **/rotation (로테이션)**
 - 향후 맵 로테이션 일정을 확인합니다.
-- 옵션: \`count (개수)\` - 표시할 일정 개수
+- 옵션: \`count (개수)\`
 
 **/when (언제)**
 - 특정 맵이 언제 나오는지 검색합니다.
@@ -246,7 +426,23 @@ const commands = [
 
 **/recommend (직업추천)**
 - 무작위로 PvP 직업을 추천해줍니다.
-- 옵션: \`count (개수)\` - 간략하게 여러 직업 추천
+- 옵션: \`count (개수)\`
+
+**/dice (주사위)**
+- 주사위를 굴립니다. 기본값 1-999.
+- 옵션: \`range (범위)\`
+
+**/duel (결투)**
+- 상대방과 주사위 결투를 합니다.
+- 옵션: \`target (상대방)\`
+
+**/stats (전적)**
+- 결투 전적을 확인합니다.
+- 옵션: \`target (대상)\`
+
+**/tip (팁)**
+- 유용한 팁을 검색합니다.
+- 옵션: \`keyword (키워드)\`
 
 **/help (도움말)**
 - 이 도움말을 표시합니다.

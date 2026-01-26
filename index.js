@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import commands from './commands.js';
+import { startWebServer } from './web/server.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -80,6 +81,9 @@ client.on(Events.InteractionCreate, async interaction => {
         }
     }
 });
+
+// 웹 UI 서버 시작
+startWebServer();
 
 // 봇 로그인
 client.login(token);

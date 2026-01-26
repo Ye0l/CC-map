@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CC-Map Bot Admin</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 20px; background-color: #f4f4f9; }
+        h1 { color: #333; }
+        .container { max-width: 1000px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .tabs { display: flex; border-bottom: 2px solid #ddd; margin-bottom: 20px; }
+        .tab { padding: 10px 20px; cursor: pointer; font-weight: bold; color: #666; }
+        .tab.active { color: #007bff; border-bottom: 2px solid #007bff; }
+        .content { display: none; }
+        .content.active { display: block; }
+        
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { padding: 12px; border-bottom: 1px solid #ddd; text-align: left; }
+        th { background-color: #f8f9fa; }
+        
+        input, textarea { width: 100%; padding: 8px; margin-bottom: 10px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
+        button { padding: 10px 15px; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        button:hover { background-color: #0056b3; }
+        button.delete { background-color: #dc3545; }
+        button.delete:hover { background-color: #bd2130; }
+
+        .form-group { background: #f9f9f9; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>🤖 CC-Map Bot 관리자</h1>
+
+    <div class="tabs">
+        <div class="tab active" onclick="showTab('tips')">팁 관리</div>
+        <div class="tab" onclick="showTab('maps')">맵 관리</div>
+        <div class="tab" onclick="showTab('stats')">결투 전적</div>
+    </div>
+
+    <!-- 팁 관리 -->
+    <div id="tips" class="content active">
+        <div class="form-group">
+            <h3>새로운 팁 추가</h3>
+            <input type="text" id="tipCategory" placeholder="카테고리 (예: 직업, 맵)">
+            <input type="text" id="tipKeyword" placeholder="키워드 (예: 나이트, 팔라이스트라)">
+            <textarea id="tipContent" rows="4" placeholder="팁 내용"></textarea>
+            <button onclick="addTip()">추가하기</button>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>카테고리</th>
+                    <th>키워드</th>
+                    <th>내용</th>
+                    <th>작업</th>
+                </tr>
+            </thead>
+            <tbody id="tipList"></tbody>
+        </table>
+    </div>
+
+    <!-- 맵 관리 -->
+    <div id="maps" class="content">
+        <h3>맵 리스트</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>순서</th>
+                    <th>이름</th>
+                    <th>이모지</th>
+                </tr>
+            </thead>
+            <tbody id="mapList"></tbody>
+        </table>
+    </div>
+
+    <!-- 전적 조회 -->
+    <div id="stats" class="content">
+        <h3>결투 전적 랭킹 (Top 100)</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>User ID</th>
+                    <th>승</th>
+                    <th>패</th>
+                    <th>무</th>
+                </tr>
+            </thead>
+            <tbody id="statsList"></tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    const API_URL = 'http://localhost:3000/api';
+
+    function showTab(tabId) {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.content').forEach(c => c.classList.remove('active'));
+        document.querySelector(`.tab[onclick="showTab('${tabId}')"]`).classList.add('active');
+        document.getElementById(tabId).classList.add('active');
+        
+        if(tabId === 'tips') loadTips();
+        if(tabId === 'maps') loadMaps();
+        if(tabId === 'stats') loadStats();
+    }
+
+    async function loadTips() {
+        const res = await fetch(`${API_URL}/tips`);
+        const tips = await res.json();
+        const tbody = document.getElementById('tipList');
+        tbody.innerHTML = tips.map(tip => `
+            <tr>
+                <td>${tip.id}</td>
+                <td>${tip.category || '-'}</td>
+                <td>${tip.keyword}</td>
+                <td>${tip.content}</td>
+                <td><button class="delete" onclick="deleteTip(${tip.id})">삭제</button></td>
+            </tr>
+        `).join('');
+    }
+
+    async function addTip() {
+        const category = document.getElementById('tipCategory').value;
+        const keyword = document.getElementById('tipKeyword').value;
+        const content = document.getElementById('tipContent').value;
+
+        if(!keyword || !content) return alert('키워드와 내용은 필수입니다.');
+
+        await fetch(`${API_URL}/tips`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ category, keyword, content })
+        });
+
+        document.getElementById('tipCategory').value = '';
+        document.getElementById('tipKeyword').value = '';
+        document.getElementById('tipContent').value = '';
+        loadTips();
+    }
+
+    async function deleteTip(id) {
+        if(!confirm('정말 삭제하시겠습니까?')) return;
+        await fetch(`${API_URL}/tips/${id}`, { method: 'DELETE' });
+        loadTips();
+    }
+
+    async function loadMaps() {
+        const res = await fetch(`${API_URL}/maps`);
+        const maps = await res.json();
+        const tbody = document.getElementById('mapList');
+        tbody.innerHTML = maps.map(map => `
+            <tr>
+                <td>${map.rotation_order}</td>
+                <td>${map.name}</td>
+                <td>:${map.emote}:</td>
+            </tr>
+        `).join('');
+    }
+
+    async function loadStats() {
+        const res = await fetch(`${API_URL}/duel_stats`);
+        const stats = await res.json();
+        const tbody = document.getElementById('statsList');
+        tbody.innerHTML = stats.map(s => `
+            <tr>
+                <td>${s.user_id}</td>
+                <td>${s.wins}</td>
+                <td>${s.losses}</td>
+                <td>${s.draws}</td>
+            </tr>
+        `).join('');
+    }
+
+    // 초기 로드
+    loadTips();
+</script>
+
+</body>
+</html>
