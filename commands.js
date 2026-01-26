@@ -198,9 +198,9 @@ const commands = [
                     // 간략 모드: "이모지 직업명, 이모지 직업명..."
                     const simpleList = recommendations.map(r => {
                         const emote = jobEmotes[r.job_name] || '';
-                        return `${emote}**${r.job_name}**`;
+                        return `- ${emote}**${r.job_name}**`;
                     }).join('\n');
-                    await interaction.editReply(`🎲 추천 직업: ${simpleList}`);
+                    await interaction.editReply(`🎲 추천 직업 연속가챠\n${simpleList}`);
                 } else {
                     // 상세 모드: 기존 1개 상세 출력
                     const r = recommendations[0];
