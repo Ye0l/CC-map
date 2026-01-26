@@ -1,6 +1,7 @@
 import { SlashCommandBuilder } from 'discord.js';
 import { getCurrentRotation, generateRotationSeed, getNextMapSchedules, maps } from './mapRotation.js';
 import { zodiacSigns, getDailyHoroscope } from './horoscope.js';
+import db from './db.js';
 
 /**
  * 명령어 정의 목록
@@ -161,6 +162,25 @@ const commands = [
             await interaction.respond(
                 filtered.map(choice => ({ name: choice, value: choice }))
             );
+        }
+    },
+    // /직업추천 명령어
+    {
+        data: new SlashCommandBuilder()
+            .setName('직업추천')
+            .setDescription('무작위로 직업 하나를 추천해줍니다.'),
+        async execute(interaction) {
+            try {
+                const row = db.prepare('SELECT name FROM job_seeds ORDER BY RANDOM() LIMIT 1').get();
+                if (!row) {
+                    await interaction.reply({ content: '❌ 등록된 직업이 없습니다.', ephemeral: true });
+                    return;
+                }
+                await interaction.reply(`🎲 오늘의 추천 직업은 **[${row.name}]** 입니다!`);
+            } catch (error) {
+                console.error(error);
+                await interaction.reply({ content: '직업을 추천하는 중 오류가 발생했습니다.', ephemeral: true });
+            }
         }
     }
 ];
