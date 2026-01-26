@@ -537,7 +537,7 @@ const commands = [
 
             const embed = new EmbedBuilder()
                 .setColor(0xF39C12)
-                .setTitle(`💡 Tip: ${emote}${tip.keyword}`)
+                .setTitle(`${emote}${tip.keyword}`)
                 .setDescription(tip.content);
 
             await interaction.reply({ embeds: [embed] });
