@@ -175,11 +175,11 @@ const commands = [
                 const recommendation = await getDailyJobRecommendation();
 
                 const jobEmotes = {
-                    '나이트': 'PLD', '전사': 'WAR', '암흑기사': 'DRK', '건브레이커': 'GNB',
-                    '백마도사': 'WHM', '학자': 'SCH', '점성술사': 'AST', '현자': 'SGE',
-                    '몽크': 'MNK', '용기사': 'DRG', '닌자': 'NIN', '사무라이': 'SAM', '리퍼': 'RPR', '바이퍼': 'VPR',
-                    '음유시인': 'BRD', '기공사': 'MCH', '무도가': 'DNC',
-                    '흑마도사': 'BLM', '소환사': 'SMN', '적마도사': 'RDM', '픽토맨서': 'PCT'
+                    '나이트': 'pld', '전사': 'war', '암흑기사': 'drk', '건브레이커': 'gnb',
+                    '백마도사': 'whm', '학자': 'sch', '점성술사': 'ast', '현자': 'sge',
+                    '몽크': 'mnk', '용기사': 'drg', '닌자': 'nin', '사무라이': 'sam', '리퍼': 'rpr', '바이퍼': 'vpr',
+                    '음유시인': 'brd', '기공사': 'mch', '무도가': 'dnc',
+                    '흑마도사': 'blm', '소환사': 'smn', '적마도사': 'rdm', '픽토맨서': 'pct'
                 };
 
                 const emote = jobEmotes[recommendation.job_name] ? `:${jobEmotes[recommendation.job_name]}:` : '';
