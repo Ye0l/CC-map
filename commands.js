@@ -267,17 +267,34 @@ const commands = [
                     .setRequired(true)
             ),
         async execute(interaction) {
-            const target = interaction.options.getUser('target');
+            if (!interaction.guild) {
+                await interaction.reply({ content: '이 명령어는 서버 내에서만 사용할 수 있습니다.', ephemeral: true });
+                return;
+            }
+
+            const targetUser = interaction.options.getUser('target');
             const user = interaction.user;
 
-            if (target.id === user.id) {
+            if (targetUser.id === user.id) {
                 await interaction.reply({ content: '자기 자신과는 결투할 수 없습니다!', ephemeral: true });
                 return;
             }
-            if (target.bot) {
+            if (targetUser.bot) {
                 await interaction.reply({ content: '봇과는 결투할 수 없습니다. (너무 강하거든요!)', ephemeral: true });
                 return;
             }
+
+            // 닉네임 가져오기
+            const member = interaction.member;
+            let targetMember;
+            try {
+                targetMember = await interaction.guild.members.fetch(targetUser.id);
+            } catch (e) {
+                targetMember = null;
+            }
+
+            const userNick = member.nickname || user.username;
+            const targetNick = targetMember ? (targetMember.nickname || targetUser.username) : targetUser.username;
 
             const userRoll = Math.floor(Math.random() * 100) + 1;
             const targetRoll = Math.floor(Math.random() * 100) + 1;
@@ -288,12 +305,12 @@ const commands = [
             let isDraw = false;
 
             if (userRoll > targetRoll) {
-                resultMsg = `🏆 **${user.username} 승리!**`;
+                resultMsg = `🏆 **${userNick} 승리!**`;
                 winnerId = user.id;
-                loserId = target.id;
+                loserId = targetUser.id;
             } else if (targetRoll > userRoll) {
-                resultMsg = `🏆 **${target.username} 승리!**`;
-                winnerId = target.id;
+                resultMsg = `🏆 **${targetNick} 승리!**`;
+                winnerId = targetUser.id;
                 loserId = user.id;
             } else {
                 resultMsg = '🤝 **무승부!**';
@@ -302,14 +319,17 @@ const commands = [
 
             const response = [
                 `⚔️ **결투 발생!** ⚔️`,
-                `${user.username} 🎲 ${userRoll}  vs  ${targetRoll} 🎲 ${target.username}`,
+                `${userNick} 🎲 ${userRoll}  vs  ${targetRoll} 🎲 ${targetNick}`,
                 '',
                 resultMsg
             ].join('\n');
 
-            // DB 업데이트 함수
-            const updateStats = (id, result) => {
-                const stats = db.prepare('SELECT * FROM duel_stats WHERE user_id = ?').get(id) || { wins: 0, losses: 0, draws: 0 };
+            // DB 업데이트 함수 (서버별 분리를 위해 user_id@guild_id 형식 사용)
+            const guildId = interaction.guild.id;
+            const updateStats = (userId, result) => {
+                const dbKey = `${userId}@${guildId}`;
+                const stats = db.prepare('SELECT * FROM duel_stats WHERE user_id = ?').get(dbKey) || { wins: 0, losses: 0, draws: 0 };
+
                 if (result === 'win') stats.wins++;
                 else if (result === 'loss') stats.losses++;
                 else if (result === 'draw') stats.draws++;
@@ -317,12 +337,12 @@ const commands = [
                 db.prepare(`
                     INSERT OR REPLACE INTO duel_stats (user_id, wins, losses, draws)
                     VALUES (?, ?, ?, ?)
-                `).run(id, stats.wins, stats.losses, stats.draws);
+                `).run(dbKey, stats.wins, stats.losses, stats.draws);
             };
 
             if (isDraw) {
                 updateStats(user.id, 'draw');
-                updateStats(target.id, 'draw');
+                updateStats(targetUser.id, 'draw');
             } else {
                 updateStats(winnerId, 'win');
                 updateStats(loserId, 'loss');
@@ -345,11 +365,26 @@ const commands = [
                     .setRequired(false)
             ),
         async execute(interaction) {
-            const target = interaction.options.getUser('target') || interaction.user;
-            const stats = db.prepare('SELECT * FROM duel_stats WHERE user_id = ?').get(target.id);
+            if (!interaction.guild) {
+                await interaction.reply({ content: '이 명령어는 서버 내에서만 사용할 수 있습니다.', ephemeral: true });
+                return;
+            }
+
+            const targetUser = interaction.options.getUser('target') || interaction.user;
+            let targetMember;
+            try {
+                targetMember = await interaction.guild.members.fetch(targetUser.id);
+            } catch (e) {
+                targetMember = null;
+            }
+            const targetNick = targetMember ? (targetMember.nickname || targetUser.username) : targetUser.username;
+
+            const guildId = interaction.guild.id;
+            const dbKey = `${targetUser.id}@${guildId}`;
+            const stats = db.prepare('SELECT * FROM duel_stats WHERE user_id = ?').get(dbKey);
 
             if (!stats) {
-                await interaction.reply(`${target.username}님은 아직 결투 기록이 없습니다.`);
+                await interaction.reply(`${targetNick}님은 이 서버에서 결투 기록이 없습니다.`);
                 return;
             }
 
@@ -357,12 +392,70 @@ const commands = [
             const winRate = total > 0 ? ((stats.wins / total) * 100).toFixed(1) : 0;
 
             await interaction.reply({
-                content: `📊 **${target.username}님의 전적**\n\n` +
+                content: `📊 **${targetNick}님의 전적**\n\n` +
                     `🟢 승리: ${stats.wins}회\n` +
                     `🔴 패배: ${stats.losses}회\n` +
                     `⚪ 무승부: ${stats.draws}회\n` +
                     `🔥 승률: ${winRate}%`
             });
+        }
+    },
+    {
+        data: new SlashCommandBuilder()
+            .setName('team')
+            .setNameLocalizations({ 'ko': '팀' })
+            .setDescription('Divide into two teams.')
+            .setDescriptionLocalizations({ 'ko': '두 팀으로 나눕니다.' })
+            .addIntegerOption(option =>
+                option.setName('count')
+                    .setNameLocalizations({ 'ko': '인원' })
+                    .setDescription('Number of people (distributes numbers)')
+                    .setDescriptionLocalizations({ 'ko': '인원 수 (1부터 해당 숫자까지 배분)' })
+                    .setRequired(false)
+            )
+            .addStringOption(option =>
+                option.setName('names')
+                    .setNameLocalizations({ 'ko': '이름' })
+                    .setDescription('Names separated by spaces')
+                    .setDescriptionLocalizations({ 'ko': '공백으로 구분된 이름 목록' })
+                    .setRequired(false)
+            ),
+        async execute(interaction) {
+            const count = interaction.options.getInteger('count');
+            const namesStr = interaction.options.getString('names');
+
+            if (!count && !namesStr) {
+                await interaction.reply({ content: '❌ 인원(count) 또는 이름(names) 중 하나는 반드시 입력해야 합니다.', ephemeral: true });
+                return;
+            }
+
+            let items = [];
+            if (namesStr) {
+                items = namesStr.split(/\s+/).filter(Boolean);
+            } else {
+                items = Array.from({ length: count }, (_, i) => i + 1);
+            }
+
+            if (items.length < 2) {
+                await interaction.reply({ content: '❌ 팀을 나누려면 최소 2명 이상이어야 합니다.', ephemeral: true });
+                return;
+            }
+
+            // Shuffle
+            for (let i = items.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [items[i], items[j]] = [items[j], items[i]];
+            }
+
+            const mid = Math.ceil(items.length / 2);
+            const teamA = items.slice(0, mid);
+            const teamB = items.slice(mid);
+
+            await interaction.reply(
+                `📢 **팀 나누기 결과**\n\n` +
+                `🔴 **A팀 (${teamA.length}명)**: ${teamA.join(', ')}\n` +
+                `🔵 **B팀 (${teamB.length}명)**: ${teamB.join(', ')}`
+            );
         }
     },
     {
@@ -439,6 +532,10 @@ const commands = [
 **/stats (전적)**
 - 결투 전적을 확인합니다.
 - 옵션: \`target (대상)\`
+
+**/team (팀)**
+- 인원 또는 이름을 두 팀으로 나눕니다.
+- 옵션: \`count (인원)\` 또는 \`names (이름 목록)\`
 
 **/tip (팁)**
 - 유용한 팁을 검색합니다.
