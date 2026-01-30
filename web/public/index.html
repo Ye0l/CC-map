@@ -7,7 +7,7 @@
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 20px; background-color: #f4f4f9; }
         h1 { color: #333; }
-        .container { max-width: 1000px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .container { max-width: 1400px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
         .tabs { display: flex; border-bottom: 2px solid #ddd; margin-bottom: 20px; }
         .tab { padding: 10px 20px; cursor: pointer; font-weight: bold; color: #666; }
         .tab.active { color: #007bff; border-bottom: 2px solid #007bff; }
@@ -41,11 +41,15 @@
     <!-- 팁 관리 -->
     <div id="tips" class="content active">
         <div class="form-group">
-            <h3>새로운 팁 추가</h3>
+            <h3>팁 추가 / 수정</h3>
+            <input type="hidden" id="tipId">
             <input type="text" id="tipCategory" placeholder="카테고리 (예: 직업, 맵)">
             <input type="text" id="tipKeyword" placeholder="키워드 (예: 나이트, 팔라이스트라)">
             <textarea id="tipContent" rows="4" placeholder="팁 내용"></textarea>
-            <button onclick="addTip()">추가하기</button>
+            <div style="display: flex; gap: 10px;">
+                <button onclick="saveTip()" id="saveBtn">저장하기</button>
+                <button onclick="resetForm()" style="background-color: #6c757d;">초기화</button>
+            </div>
         </div>
         <table>
             <thead>
@@ -107,37 +111,65 @@
         if(tabId === 'stats') loadStats();
     }
 
+    let tipsData = [];
+
     async function loadTips() {
         const res = await fetch(`${API_URL}/tips`);
-        const tips = await res.json();
+        tipsData = await res.json();
         const tbody = document.getElementById('tipList');
-        tbody.innerHTML = tips.map(tip => `
+        tbody.innerHTML = tipsData.map(tip => `
             <tr>
                 <td>${tip.id}</td>
                 <td>${tip.category || '-'}</td>
                 <td>${tip.keyword}</td>
-                <td>${tip.content}</td>
-                <td><button class="delete" onclick="deleteTip(${tip.id})">삭제</button></td>
+                <td style="white-space: pre-wrap;">${tip.content}</td>
+                <td>
+                    <button onclick="editTip(${tip.id})" style="background-color: #28a745; margin-right: 5px;">수정</button>
+                    <button class="delete" onclick="deleteTip(${tip.id})">삭제</button>
+                </td>
             </tr>
         `).join('');
     }
 
-    async function addTip() {
+    function editTip(id) {
+        const tip = tipsData.find(t => t.id === id);
+        if(!tip) return;
+        
+        document.getElementById('tipId').value = tip.id;
+        document.getElementById('tipCategory').value = tip.category || '';
+        document.getElementById('tipKeyword').value = tip.keyword;
+        document.getElementById('tipContent').value = tip.content;
+        
+        document.getElementById('saveBtn').innerText = '수정 완료';
+        window.scrollTo(0, 0);
+    }
+
+    function resetForm() {
+        document.getElementById('tipId').value = '';
+        document.getElementById('tipCategory').value = '';
+        document.getElementById('tipKeyword').value = '';
+        document.getElementById('tipContent').value = '';
+        document.getElementById('saveBtn').innerText = '저장하기';
+    }
+
+    async function saveTip() {
+        const id = document.getElementById('tipId').value;
         const category = document.getElementById('tipCategory').value;
         const keyword = document.getElementById('tipKeyword').value;
         const content = document.getElementById('tipContent').value;
 
         if(!keyword || !content) return alert('키워드와 내용은 필수입니다.');
 
-        await fetch(`${API_URL}/tips`, {
-            method: 'POST',
+        const url = id ? `${API_URL}/tips/${id}` : `${API_URL}/tips`;
+        const method = id ? 'PUT' : 'POST';
+
+        await fetch(url, {
+            method: method,
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ category, keyword, content })
         });
 
-        document.getElementById('tipCategory').value = '';
-        document.getElementById('tipKeyword').value = '';
-        document.getElementById('tipContent').value = '';
+        resetForm();
         loadTips();
     }
 
