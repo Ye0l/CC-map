@@ -39,66 +39,181 @@ function getDateString(dateObj = new Date()) {
 /**
  * 1. 데일리 팟캐스트 대본 생성 (Long-form Examples 적용)
  */
-async function generateDailyPodcastScripts(date) {
-    console.log(`Generating long-form podcast scripts for ${date}...`);
+/**
+ * 1. 데일리 팟캐스트 프롬프트 생성 (외부 호출 가능)
+ */
+export async function generatePodcastPrompt(date) {
+    // 1. Load Skills Data
+    let skillsData = {};
+    try {
+        const skillsPath = path.join(__dirname, 'ff14_pvp_skills.json');
+        if (fs.existsSync(skillsPath)) {
+            skillsData = JSON.parse(fs.readFileSync(skillsPath, 'utf8'));
+        }
+    } catch (e) {
+        console.error("Failed to load skills data:", e);
+    }
 
-    const voiceGuide = `
-    [Host Style: Energetic / Hype]
-    - Fenrir: (열혈 캐스터) 스포츠 중계 톤. 텐션이 아주 높고 목소리가 큼.
-    - Puck: (재간둥이 DJ) 말이 빠르고 농담, 비유, 의성어를 많이 씀.
-    - Zephyr: (아침 라디오) 희망차고 또랑또랑한 긍정 에너지.
+    // 2. Load Maps
+    let availableMaps = [];
+    try {
+        availableMaps = db.prepare('SELECT name FROM maps').all().map(m => m.name);
+        if (availableMaps.length === 0) availableMaps = ["Palaistra"];
+    } catch (e) {
+        availableMaps = ["Palaistra"];
+    }
 
-    [Host Style: Professional / Calm]
-    - Charon: (심야 뉴스) 아주 차분하고 낮은 톤. 호흡을 길게 가져감.
-    - Kore: (카리스마 교관) 단호하고 팩트 위주의 딱딱한 말투.
-    - Rasalgethi: (분석가) 논리적이고 지적인 느낌.
+    // 3. Random Selection
+    const JOBS = Object.keys(skillsData);
+    let randomJobs = [];
 
-    [Host Style: Emotional / Friendly]
-    - Enceladus: (감성 DJ) 나긋나긋하고 공감해주는 스타일. 숨소리가 섞임.
-    - Aoede: (친절한 상담사) 부드럽고 편안함.
-    `;
+    // Select 6 to 10 random jobs
+    const numJobs = Math.floor(Math.random() * (10 - 6 + 1)) + 6;
+    if (JOBS.length >= numJobs) {
+        randomJobs = [...JOBS].sort(() => 0.5 - Math.random()).slice(0, numJobs);
+    } else {
+        randomJobs = JOBS.sort(() => 0.5 - Math.random()); // Fallback to all if less than requested
+    }
+
+    // Select 3 to 5 random maps
+    let randomMaps = [];
+    const numMaps = Math.floor(Math.random() * (5 - 3 + 1)) + 3;
+    const shuffledMaps = [...availableMaps].sort(() => 0.5 - Math.random());
+    randomMaps = shuffledMaps.slice(0, Math.min(numMaps, shuffledMaps.length));
+
+    // 4. Format Skills (Clean up potency/numbers)
+    const formatSkills = (jobName) => {
+        const jobSkills = skillsData[jobName] || [];
+        return jobSkills.map(s => {
+            let effect = s.effect || "";
+            // Remove detailed numbers to focus on vibes
+            effect = effect.replace(/위력: \d+~?\d*/g, '');
+            effect = effect.replace(/회복력: \d+~?\d*/g, '');
+            effect = effect.replace(/지속 피해 위력: \d+/g, '');
+            effect = effect.replace(/지속 회복력: \d+/g, '');
+            effect = effect.replace(/※.*?입니다\./g, '');
+            effect = effect.replace(/발동 조건:.*?$/gm, ''); // Remove conditions often containing numbers
+            effect = effect.replace(/\n+/g, ' ').trim();
+            return `- **${s.name}**: ${effect}`;
+        }).join('\n');
+    };
+
+    // Construct Job Info String dynamically
+    const featuredJobsText = randomJobs.map((job, index) => {
+        return `**Featured Job ${index + 1}: ${job}**\n[Skill Reference - DO NOT mention numbers, just usage/feeling]\n${formatSkills(job)}`;
+    }).join('\n\n');
+
+    // Construct Map Info String
+    const featuredMapsText = `**Featured Maps**: ${randomMaps.join(', ')}`;
+
+    const VOICE_PROFILES = {
+        "Fenrir": {
+            role: "The Energetic Shoutcaster",
+            scene: "A high-octane e-sports commentary booth. Screens blazing, crowd roaring in the distance. The air is electric.",
+            director_notes: `
+Style: Explosive, hype-man energy. Like a sports commentator during a goal.
+Pacing: Fast, urgent, punchy.
+Dynamics: Loud projection. Elongates vowels on excitement (e.g., "Goooaaal!").`
+        },
+        "Puck": {
+            role: "The Mischievous Radio DJ",
+            scene: "A messy, colorful studio filled with toys and fan mail. A 'On Air' sign flickers playfully. Sound effects board is ready.",
+            director_notes: `
+Style: Sassy, playful, teasing. Prone to giggling and using slang.
+Pacing: Bouncy and irregular. Stops to laugh at own jokes.
+Tone: Bright, sunny, but slightly mocking.`
+        },
+        "Charon": {
+            role: "The Midnight News Anchor",
+            scene: "A dimly lit, sleek news desk overlooking a rainy cyberpunk city. Smooth jazz plays faintly in the background.",
+            director_notes: `
+Style: Deep, smooth, authoritative. The "Late Night FM" voice.
+Pacing: Slow, deliberate, with significant pauses for effect.
+Tone: Serious, soothing, trustworthy.`
+        }
+    };
 
     const prompt = `
-    당신은 "파이널 판타지 14: 크리스탈라인 컨플릭트"의 메인 라디오 DJ입니다.
-    오늘은 ${date}입니다.
+    You are the showrunner for "Crystalline Conflict Radio".
+    Date: ${date}
 
-    청취자를 위해 **실제 방송 분량 1분(60초) 이상**이 나오는 충실한 라디오 대본 3개를 작성해주세요.
+    [Today's Broadcast Topics]
+    Here is the official game data. Use these EXACT names for skills and maps to ensure authenticity for Korean players.
+    
+    ${featuredMapsText}
 
-    [핵심 지침: 길이와 디테일]
-    1. **절대 짧게 끝내지 마세요.** 각 대본은 **공백 포함 최소 300자 이상**이어야 합니다.
-    2. **기승전결 구조:**
-       - [Intro]: 시그니처 인사 + 오늘 날씨/분위기 스몰토크 (15초)
-       - [Body]: 구체적인 경험담, 상황 묘사, 청취자 사연 등을 **매우 디테일하게** 풀기 (35초 이상)
-       - [Outro]: 교훈이나 제안 + 마무리 인사 (10초)
-    3. **내용 채우기 팁:** "이기세요"라고 말하지 말고, "어제 제가 연장전에서 심장이 터질 뻔했는데..."라며 상황을 묘사하세요.
+    ${featuredJobsText}
 
-    [Voice Mapping]
-    주제에 가장 적합한 성우(Voice Name)를 위 [Voice Guide]에서 직접 골라 JSON에 넣으세요.
+    [Constraint]
+    - Do NOT use technical potency numbers (e.g., "8000 potency"). Focus on vibes, playstyle, and lucky feelings.
+    - Use the provided Skill Names naturally in sentences.
+    - Choose 2-3 topics from the list above naturally. You don't have to use all of them.
 
-    [응답 형식 - JSON Only]
-    반드시 아래 JSON 포맷으로, **예시처럼 길게** 작성하세요.
+    Generate 3 distinct radio scripts (approx. 60 seconds each) based on the following profiles.
+    
+    ---
+    # AUDIO PROFILE 1: Fenrir
+    ## "${VOICE_PROFILES.Fenrir.role}"
+    
+    ## THE SCENE: ${VOICE_PROFILES.Fenrir.scene}
+    
+    ### DIRECTOR'S NOTES
+    ${VOICE_PROFILES.Fenrir.director_notes}
+    ---
 
-    [예시 데이터]
+    ---
+    # AUDIO PROFILE 2: Charon
+    ## "${VOICE_PROFILES.Charon.role}"
+    
+    ## THE SCENE: ${VOICE_PROFILES.Charon.scene}
+    
+    ### DIRECTOR'S NOTES
+    ${VOICE_PROFILES.Charon.director_notes}
+    ---
+
+    ---
+    # AUDIO PROFILE 3: Puck
+    ## "${VOICE_PROFILES.Puck.role}"
+    
+    ## THE SCENE: ${VOICE_PROFILES.Puck.scene}
+    
+    ### DIRECTOR'S NOTES
+    ${VOICE_PROFILES.Puck.director_notes}
+    ---
+
+    [Output Format - JSON Only]
+    The "script" field MUST start with the full Context (Profile, Scene, Notes) EXACTLY as shown above, followed by the spoken dialogue.
     [
         { 
             "id": 1, 
-            "script": "(BGM이 고조되는 느낌으로 활기차게) 안녕하십니까! 크리스탈라인 라디오, 여러분의 영원한 선봉장 펜리르입니다! (박수) 으하하! 오늘 전장 날씨, 아주 맑음입니다! 다들 칼 갈고 나오셨습니까? (목소리를 낮추며 진지하게) 제가 어제 정말 기가 막힌 판을 하나 겪었거든요. 볼카노 행성 전장이었는데, 우리 팀이 99%까지 밀리고 있었단 말이죠. 다들 '아, 졌다' 하고 포기하려는 찰나였습니다. (갑자기 텐션을 높이며) 그런데! 우리 팀 나이트가! 그 절체절명의 순간에 '감싸기'를 쓰고 크리스탈 안으로 몸을 던지는 겁니다! 와... 진짜 제가 거기서 소름이 쫙 돋아서 바로 '리미트 브레이크' 꽂아넣고 전세를 뒤집었지 뭡니까! (흥분해서) 여러분, 전장은 끝날 때까지 끝난 게 아닙니다. 그 1초, 그 1틱의 차이가 승패를 가른다고요! 오늘 여러분도 그런 기적 같은 역전승의 주인공이 되시길 바랍니다. 포기하지 마세요! 전장으로 출발! 가자!!", 
+            "script": "# AUDIO PROFILE 1: Fenrir\n## \"The Energetic Shoutcaster\"\n\n## THE SCENE: A high-octane e-sports commentary booth. Screens blazing, crowd roaring in the distance. The air is electric.\n\n### DIRECTOR'S NOTES\n\nStyle: Explosive, hype-man energy. Like a sports commentator during a goal.\nPacing: Fast, urgent, punchy.\nDynamics: Loud projection. Elongates vowels on excitement (e.g., \"Goooaaal!\").\n\n(BGM이 고조되는 느낌으로 활기차게) 안녕하십니까! 크리스탈라인 라디오, 여러분의 영원한 선봉장 펜리르입니다! (박수) 으하하! 오늘 전장 날씨, 아주 맑음입니다! 다들 칼 갈고 나오셨습니까? (목소리를 낮추며 진지하게) 제가 어제 정말 기가 막힌 판을 하나 겪었거든요. 볼카노 행성 전장이었는데, 우리 팀이 99%까지 밀리고 있었단 말이죠. 다들 '아, 졌다' 하고 포기하려는 찰나였습니다. (갑자기 텐션을 높이며) 그런데! 우리 팀 나이트가! 그 절체절명의 순간에 '감싸기'를 쓰고 크리스탈 안으로 몸을 던지는 겁니다! 와... 진짜 제가 거기서 소름이 쫙 돋아서 바로 '리미트 브레이크' 꽂아넣고 전세를 뒤집었지 뭡니까! (흥분해서) 여러분, 전장은 끝날 때까지 끝난 게 아닙니다. 그 1초, 그 1틱의 차이가 승패를 가른다고요! 오늘 여러분도 그런 기적 같은 역전승의 주인공이 되시길 바랍니다. 포기하지 마세요! 전장으로 출발! 가자!!", 
             "voice": "Fenrir" 
         },
         { 
             "id": 2, 
-            "script": "(차분하고 지적인 톤으로) 1월 31일의 심야 브리핑, 카론입니다. (종이 넘기는 소리) 모두 편안한 밤 보내고 계신지요. 오늘은 조금 진지한 이야기를 해볼까 합니다. 최근 랭크 매치 데이터를 보면 '전사'와 '백마도사'의 픽률이 기형적으로 높아졌습니다. 이게 무엇을 의미할까요? (잠시 침묵) 바로 '군중 제어기', 즉 CC기 연계가 승리의 절대적인 열쇠가 되었다는 뜻입니다. 예전처럼 혼자서 무쌍을 찍는 시대는 지났어요. (단호하게) 제가 오늘 관전한 경기에서도, 아무리 딜이 센 사무라이라도 기절 한 번 걸리니까 정화도 못 쓰고 순식간에 녹아버리더군요. 늑대 여러분, 지금 당장 팀원과 합을 맞추세요. '내가 캐리하겠다'는 생각보다는 '내가 팀을 위해 CC기를 넣어주겠다'는 마인드. 그게 바로 크리스탈 등급으로 가는 지름길입니다. 오늘 밤은 동료를 믿어보시길. 이상, 카론이었습니다.", 
+            "script": "# AUDIO PROFILE 2: Charon\n## \"The Midnight News Anchor\"\n\n## THE SCENE: A dimly lit, sleek news desk overlooking a rainy cyberpunk city. Smooth jazz plays faintly in the background.\n\n### DIRECTOR'S NOTES\n\nStyle: Deep, smooth, authoritative. The \"Late Night FM\" voice.\nPacing: Slow, deliberate, with significant pauses for effect.\nTone: Serious, soothing, trustworthy.\n\n(차분하고 지적인 톤으로) 1월 31일의 심야 브리핑, 카론입니다. (종이 넘기는 소리) 모두 편안한 밤 보내고 계신지요. 오늘은 조금 진지한 이야기를 해볼까 합니다. 최근 랭크 매치 데이터를 보면 '전사'와 '백마도사'의 픽률이 기형적으로 높아졌습니다. 이게 무엇을 의미할까요? (잠시 침묵) 바로 '군중 제어기', 즉 CC기 연계가 승리의 절대적인 열쇠가 되었다는 뜻입니다. 예전처럼 혼자서 무쌍을 찍는 시대는 지났어요. (단호하게) 제가 오늘 관전한 경기에서도, 아무리 딜이 센 사무라이라도 기절 한 번 걸리니까 정화도 못 쓰고 순식간에 녹아버리더군요. 늑대 여러분, 지금 당장 팀원과 합을 맞추세요. '내가 캐리하겠다'는 생각보다는 '내가 팀을 위해 CC기를 넣어주겠다'는 마인드. 그게 바로 크리스탈 등급으로 가는 지름길입니다. 오늘 밤은 동료를 믿어보시길. 이상, 카론이었습니다.", 
             "voice": "Charon" 
         },
         {
             "id": 3,
-            "script": "(키득키득 웃으며) 아~ 마이크 테스트, 마이크 테스트. 안녕? 나야, 퍽(Puck)! (장난스럽게) 야, 너네 솔직히 말해봐. 어제 '방어' 켜놓고 물약 마시는 거 까먹은 적 있지? 그치? (비웃듯이) 에이~ 거짓말 하지 마. 내가 다 봤어! 어제 팔라이스트라 맵에서 구석에 숨어서 엘릭서 마시다가, 적한테 들켜서 허둥지둥 도망가던 닌자! 그래, 너 말이야 너! (깔깔 웃으며) 아 진짜 배꼽 빠지는 줄 알았다니까? 근데 뭐, 사실 나도 가끔 그러긴 해. 급하면 물약 버튼이 아니라 감정표현 버튼 누르고 막 춤추고 그런다? (능청스럽게) 뭐 어때, 게임인데! 실수 좀 하면 어때? 웃으면서 하는 거지! 대신 랭크 매치에서는 그러면 안 된다? 알았지? 형이 지켜본다! 자, 오늘도 즐겜하고! 멘탈 꽉 잡으라고! 안녕!",
+            "script": "# AUDIO PROFILE 3: Puck\n## \"The Mischievous Radio DJ\"\n\n## THE SCENE: A messy, colorful studio filled with toys and fan mail. A 'On Air' sign flickers playfully. Sound effects board is ready.\n\n### DIRECTOR'S NOTES\n\nStyle: Sassy, playful, teasing. Prone to giggling and using slang.\nPacing: Bouncy and irregular. Stops to laugh at own jokes.\nTone: Bright, sunny, but slightly mocking.\n\n(키득키득 웃으며) 아~ 마이크 테스트, 마이크 테스트. 안녕? 나야, 퍽(Puck)! (장난스럽게) 야, 너네 솔직히 말해봐. 어제 '방어' 켜놓고 물약 마시는 거 까먹은 적 있지? 그치? (비웃듯이) 에이~ 거짓말 하지 마. 내가 다 봤어! 어제 팔라이스트라 맵에서 구석에 숨어서 엘릭서 마시다가, 적한테 들켜서 허둥지둥 도망가던 닌자! 그래, 너 말이야 너! (깔깔 웃으며) 아 진짜 배꼽 빠지는 줄 알았다니까? 근데 뭐, 사실 나도 가끔 그러긴 해. 급하면 물약 버튼이 아니라 감정표현 버튼 누르고 막 춤추고 그런다? (능청스럽게) 뭐 어때, 게임인데! 실수 좀 하면 어때? 웃으면서 하는 거지! 대신 랭크 매치에서는 그러면 안 된다? 알았지? 형이 지켜본다! 자, 오늘도 즐겜하고! 멘탈 꽉 잡으라고! 안녕!",
             "voice": "Puck"
         }
     ]
     `;
 
+    return prompt;
+}
+
+/**
+ * 2. 데일리 팟캐스트 대본 생성 실행
+ */
+async function generateDailyPodcastScripts(date) {
+    console.log(`Generating podcast scripts for ${date}...`);
+
     try {
+        const prompt = await generatePodcastPrompt(date);
+
         const result = await textModel.generateContent(prompt);
         const response = await result.response;
         let text = response.text();
@@ -109,7 +224,7 @@ async function generateDailyPodcastScripts(date) {
         console.error("Script generation failed:", e);
         return [{
             id: 1,
-            script: "대본 생성 중 오류가 발생했습니다. (한숨) 다시 시도해 주세요.",
+            script: "대본 생성 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.",
             voice: "Charon"
         }];
     }
