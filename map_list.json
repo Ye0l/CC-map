@@ -1,26 +1,32 @@
 [
   {
     "name": "팔라이스트라",
-    "emote": "medal"
+    "emote": "medal",
+    "image": "palaistra.png"
   },
   {
     "name": "화산심장",
-    "emote": "volcano"
+    "emote": "volcano",
+    "image": "volcano.png"
   },
   {
     "name": "동방 꼭두각시 어전",
-    "emote": "dolls"
+    "emote": "dolls",
+    "image": "clockwork.png"
   },
   {
     "name": "바닷가 전투장",
-    "emote": "island"
+    "emote": "island",
+    "image": "seaside.png"
   },
   {
     "name": "절정의 구름",
-    "emote": "cloud_tornado"
+    "emote": "cloud_tornado",
+    "image": "cloud.png"
   },
   {
     "name": "붉은 사막",
-    "emote": "desert"
+    "emote": "desert",
+    "image": "desert.png"
   }
 ]

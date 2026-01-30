@@ -2,6 +2,21 @@ import { SlashCommandBuilder, EmbedBuilder } from 'discord.js';
 import { getCurrentRotation, generateRotationSeed, getNextMapSchedules, maps } from './mapRotation.js';
 import { zodiacSigns, getDailyHoroscope, getDailyJobRecommendation } from './horoscope.js';
 import db from './db.js';
+import fs from 'fs';
+import path from 'path';
+import { AttachmentBuilder } from 'discord.js';
+import mapList from './map_list.json' with { type: "json" };
+
+const getMapImage = (mapName) => {
+    const mapInfo = mapList.find(m => m.name === mapName);
+    if (!mapInfo || !mapInfo.image) return null;
+
+    const imagePath = path.join(process.cwd(), 'maps', mapInfo.image);
+    if (fs.existsSync(imagePath)) {
+        return new AttachmentBuilder(imagePath, { name: mapInfo.image });
+    }
+    return null;
+};
 
 // 직업 이모지 상수
 const jobEmotes = {
@@ -35,7 +50,18 @@ const commands = [
                 )
                 .setTimestamp();
 
-            await interaction.reply({ embeds: [embed] });
+
+
+
+            const image = getMapImage(rotation.current.map.name);
+            if (image) {
+                embed.setImage(`attachment://${image.name}`);
+            }
+
+            const options = { embeds: [embed] };
+            if (image) options.files = [image];
+
+            await interaction.reply(options);
         }
     },
     {
@@ -127,7 +153,18 @@ const commands = [
                 .setTitle(`🕰️ ${mapDisplay} 일정`)
                 .setDescription(scheduleList);
 
-            await interaction.reply({ embeds: [embed] });
+
+
+
+            const image = getMapImage(mapName);
+            if (image) {
+                embed.setImage(`attachment://${image.name}`);
+            }
+
+            const options = { embeds: [embed] };
+            if (image) options.files = [image];
+
+            await interaction.reply(options);
         },
         async autocomplete(interaction) {
             const focusedValue = interaction.options.getFocused();
