@@ -641,23 +641,45 @@ PvP 직업 추천 (단일/연속)
             .setName('podcast')
             .setNameLocalizations({ 'ko': '팟캐스트' })
             .setDescription('Listen to today\'s Crystalline Conflict podcast.')
-            .setDescriptionLocalizations({ 'ko': '오늘의 크리스탈라인 컨플릭트 팟캐스트를 듣습니다.' }),
+            .setDescriptionLocalizations({ 'ko': '오늘의 크리스탈라인 컨플릭트 팟캐스트를 듣습니다.' })
+            .addStringOption(option =>
+                option.setName('caster')
+                    .setNameLocalizations({ 'ko': '캐스터' })
+                    .setDescription('Choose a specific caster.')
+                    .setDescriptionLocalizations({ 'ko': '원하는 캐스터를 선택하세요.' })
+                    .setRequired(false)
+                    .addChoices(
+                        { name: 'Fenrir (Shoutcaster)', value: 'Fenrir' },
+                        { name: 'Charon (News Anchor)', value: 'Charon' },
+                        { name: 'Puck (Radio DJ)', value: 'Puck' }
+                    )
+            ),
         async execute(interaction) {
             await interaction.deferReply();
 
             try {
                 // podcast 모듈 동적 임포트 (순환 참조 방지)
-                const { getRandomPodcast } = await import('./podcast.js');
+                const { getRandomPodcast, getPodcastByVoice } = await import('./podcast.js');
 
                 // 오늘 날짜 구하기 (한국 시간)
                 const now = new Date();
                 const kstOffset = 9 * 60 * 60 * 1000;
                 const date = new Date(now.getTime() + kstOffset).toISOString().split('T')[0];
 
-                const podcast = getRandomPodcast(date);
+                const caster = interaction.options.getString('caster');
+                let podcast;
+
+                if (caster) {
+                    podcast = getPodcastByVoice(date, caster);
+                } else {
+                    podcast = getRandomPodcast(date);
+                }
 
                 if (!podcast) {
-                    await interaction.editReply('오늘 준비된 팟캐스트가 없습니다. 잠시 후 다시 시도해보세요 (또는 관리자에게 문의).');
+                    const msg = caster
+                        ? `오늘 ${caster} 캐스터의 방송이 준비되지 않았습니다.`
+                        : '오늘 준비된 팟캐스트가 없습니다. 잠시 후 다시 시도해보세요 (또는 관리자에게 문의).';
+                    await interaction.editReply(msg);
                     return;
                 }
 

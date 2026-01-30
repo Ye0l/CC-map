@@ -392,6 +392,14 @@ export function getRandomPodcast(date) {
 }
 
 /**
+ * 5. 특정 목소리의 팟캐스트 가져오기
+ */
+export function getPodcastByVoice(date, voice) {
+    const row = db.prepare('SELECT * FROM daily_podcasts WHERE date = ? AND voice = ?').get(date, voice);
+    return row;
+}
+
+/**
  * PCM 데이터에 WAV 헤더 추가
  * @param {Buffer} pcmData Raw PCM buffer
  * @param {number} sampleRate Sample rate (e.g., 24000)
