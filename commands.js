@@ -673,10 +673,10 @@ PvP 직업 추천 (단일/연속)
                 if (!fs.existsSync(filePath)) {
                     // 파일이 없으면 대본만 출력
                     const embed = new EmbedBuilder()
-                        .setColor(0x8E44AD)
-                        .setTitle(`🎙️ 오늘의 CC 팟캐스트 (대본)`)
-                        .setDescription(`**Voice:** ${podcast.voice}\n\n${podcast.script}`)
-                        .setFooter({ text: '오디오 생성에 실패하여 대본만 표시합니다.' });
+                        .setColor(0xE74C3C)
+                        .setTitle(`🎙️ 오늘의 CC 팟캐스트 (오류)`)
+                        .setDescription(`**Voice:** ${podcast.voice}\n\n오디오 파일이 없습니다. 관리자에게 문의하세요.`)
+                        .setFooter({ text: '오디오 생성 실패' });
 
                     await interaction.editReply({ embeds: [embed] });
                     return;
@@ -687,7 +687,7 @@ PvP 직업 추천 (단일/연속)
                 const embed = new EmbedBuilder()
                     .setColor(0x8E44AD)
                     .setTitle(`🎙️ 오늘의 CC 팟캐스트`)
-                    .setDescription(`**Voice:** ${podcast.voice}\n\n${podcast.script}`)
+                    .setDescription(`**Voice:** ${podcast.voice}`)
                     .setFooter({ text: 'Enjoy the show!' });
 
                 await interaction.editReply({ embeds: [embed], files: [attachment] });
