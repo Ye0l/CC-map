@@ -693,6 +693,7 @@ PvP 직업 추천 (단일/연속)
                 // 따라서 파일명만 추출.
                 const filename = path.basename(podcast.audio_path);
                 const filePath = path.join(process.cwd(), 'web', 'public', 'audio', filename);
+                const audioUrl = `https://cc-map.kstr.dev/audio/${filename}`;
 
                 // 파일이 존재하는지 확인 (오디오 생성 실패했을 수도 있음)
                 if (!fs.existsSync(filePath)) {
@@ -707,15 +708,13 @@ PvP 직업 추천 (단일/연속)
                     return;
                 }
 
-                const attachment = new AttachmentBuilder(filePath, { name: filename });
-
                 const embed = new EmbedBuilder()
                     .setColor(0x8E44AD)
                     .setTitle(`🎙️ 오늘의 CC 팟캐스트`)
-                    .setDescription(`**Voice:** ${podcast.voice}`)
+                    .setDescription(`**Voice:** ${podcast.voice}\n\n[팟캐스트 듣기](${audioUrl})`)
                     .setFooter({ text: 'Enjoy the show!' });
 
-                await interaction.editReply({ embeds: [embed], files: [attachment] });
+                await interaction.editReply({ content: audioUrl, embeds: [embed] });
 
             } catch (error) {
                 console.error(error);
