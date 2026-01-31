@@ -625,6 +625,9 @@ PvP 직업 추천 (단일/연속)
 
 **/tip (팁)**
 유용한 팁 검색
+
+**/podcast (팟캐스트)**
+오늘의 크리스탈라인 컨플릭트 팟캐스트 듣기
             `.trim();
 
             const embed = new EmbedBuilder()
