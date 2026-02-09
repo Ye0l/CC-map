@@ -594,7 +594,7 @@ const commands = [
             .setName('ask')
             .setNameLocalizations({ 'ko': '질문' })
             .setDescription('Ask the chatbot about CC skills.')
-            .setDescriptionLocalizations({ 'ko': '크리스탈 컨플릭트 기술에 대해 질문합니다.' })
+            .setDescriptionLocalizations({ 'ko': '교관님에게 물어봐요! (Beta)' })
             .addStringOption(option =>
                 option.setName('content')
                     .setNameLocalizations({ 'ko': '내용' })
