@@ -70,6 +70,18 @@ const initDb = () => {
         )
     `);
 
+  // 일일 팟캐스트 테이블
+  db.exec(`
+        CREATE TABLE IF NOT EXISTS daily_podcasts (
+            date TEXT NOT NULL,
+            id INTEGER NOT NULL,
+            script TEXT NOT NULL,
+            voice TEXT NOT NULL,
+            audio_path TEXT,
+            PRIMARY KEY (date, id)
+        )
+    `);
+
   // 데이터 마이그레이션 (map_list.json -> DB)
   const count = db.prepare('SELECT COUNT(*) AS count FROM maps').get().count;
   if (count === 0) {

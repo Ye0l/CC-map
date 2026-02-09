@@ -29,7 +29,7 @@ export const zodiacSigns = {
   'Pisces': '물고기자리'
 };
 
-const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
+const model = genAI.getGenerativeModel({ model: config.geminiTextModel || "gemini-3-flash-preview" });
 
 /**
  * 날짜 문자열 반환 (YYYY-MM-DD, 한국 시간 기준)
@@ -257,5 +257,15 @@ export async function preGenerateNextDayData() {
     await generateDailyJobRecommendations(date);
   } else {
     console.log(`[Batch] Job recommendations for ${date} already exist.`);
+  }
+
+  // 3. 팟캐스트 데이터 확인 및 생성
+  // 데이터가 있어도 오디오 파일이 없을 수 있으므로 항상 호출하여 확인 (podcast.js 내부에서 처리)
+  console.log(`[Batch] Ensuring podcasts for ${date}...`);
+  try {
+    const { fetchAndSaveDailyPodcasts } = await import('./podcast.js');
+    await fetchAndSaveDailyPodcasts(date);
+  } catch (e) {
+    console.error(`[Batch] Failed to ensure podcasts for ${date}:`, e);
   }
 }

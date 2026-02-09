@@ -16,6 +16,7 @@
     "better-sqlite3": "^12.6.2",
     "discord.js": "^14.25.1",
     "express": "^5.2.1",
-    "nodemon": "^3.1.11"
+    "nodemon": "^3.1.11",
+    "wav": "^1.0.2"
   }
 }
