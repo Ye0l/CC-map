@@ -697,7 +697,7 @@ PvP 직업 추천 (단일/연속)
 오늘의 크리스탈라인 컨플릭트 팟캐스트 듣기
 
 **/ask (질문)**
-크컨 기술 등 질문 (Beta)
+교관님에게 물어봐요! (Beta)
             `.trim();
 
             const embed = new EmbedBuilder()
