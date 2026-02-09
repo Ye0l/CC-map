@@ -6,6 +6,7 @@ import fs from 'fs';
 import path from 'path';
 import { AttachmentBuilder } from 'discord.js';
 import mapList from './map_list.json' with { type: "json" };
+import config from './config.json' with { type: "json" };
 
 const getMapImage = (mapName) => {
     const mapInfo = mapList.find(m => m.name === mapName);
@@ -590,6 +591,72 @@ const commands = [
     },
     {
         data: new SlashCommandBuilder()
+            .setName('ask')
+            .setNameLocalizations({ 'ko': '질문' })
+            .setDescription('Ask the chatbot about CC skills.')
+            .setDescriptionLocalizations({ 'ko': '크리스탈 컨플릭트 기술에 대해 질문합니다.' })
+            .addStringOption(option =>
+                option.setName('content')
+                    .setNameLocalizations({ 'ko': '내용' })
+                    .setDescription('Question content')
+                    .setDescriptionLocalizations({ 'ko': '질문할 내용' })
+                    .setRequired(true)
+            ),
+        async execute(interaction) {
+            const API_URL = config.chatbotApiUrl; 
+
+            const content = interaction.options.getString('content');
+
+            if (!API_URL) {
+                await interaction.reply({ content: '❌ 챗봇 API 링크가 설정되지 않았습니다.', ephemeral: true });
+                return;
+            }
+
+            await interaction.deferReply();
+
+            try {
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ chatInput: content })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`API Error: ${response.statusText}`);
+                }
+
+                const result = await response.text();
+                let answer = result;
+                
+                // JSON 파싱 시도
+                try {
+                    const json = JSON.parse(result);
+                    if (json.response) answer = json.response;
+                    else if (json.answer) answer = json.answer;
+                    else if (json.content) answer = json.content;
+                    else if (typeof json === 'object') answer = json.output;
+                } catch (e) {
+                    // JSON이 아니면 텍스트 그대로 사용
+                }
+
+                if (answer.length > 4000) answer = answer.substring(0, 4000) + '...';
+
+                const embed = new EmbedBuilder()
+                    .setColor(0x00CEC9)
+                    .setTitle(`🗨️ 질문: ${content}`)
+                    .setDescription(answer)
+                    .setFooter({ text: 'CC-Map Chatbot (Beta)' });
+
+                await interaction.editReply({ embeds: [embed] });
+
+            } catch (error) {
+                console.error(error);
+                await interaction.editReply('❌ 답변을 가져오는 중 오류가 발생했습니다.');
+            }
+        }
+    },
+    {
+        data: new SlashCommandBuilder()
             .setName('help')
             .setNameLocalizations({ 'ko': '도움말' })
             .setDescription('Shows list of available commands.')
@@ -625,6 +692,9 @@ PvP 직업 추천 (단일/연속)
 
 **/tip (팁)**
 유용한 팁 검색
+
+**/ask (질문)**
+크컨 기술 등 질문 (Beta)
             `.trim();
 
             const embed = new EmbedBuilder()
