@@ -614,11 +614,18 @@ const commands = [
 
             await interaction.deferReply();
 
+            const userId = interaction.user.id;
+            const nickname = interaction.member?.nickname || interaction.user.username;
+
             try {
                 const response = await fetch(API_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ chatInput: content })
+                    body: JSON.stringify({ 
+                        chatInput: content,
+                        userId: userId,
+                        nickname: nickname
+                    })
                 });
 
                 if (!response.ok) {
@@ -704,7 +711,7 @@ PvP 직업 추천 (단일/연속)
                 .setColor(0x0099FF)
                 .setTitle('📖 명령어 도움말')
                 .setDescription(helpMessage)
-                .setFooter({ text: 'CC-Map Bot' });
+                .setFooter({ text: 'CC-Map Bot | Last Update: 2026-02-12' });
 
             await interaction.reply({ embeds: [embed], ephemeral: true });
         }
