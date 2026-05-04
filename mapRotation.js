@@ -6,11 +6,11 @@ const maps = db.prepare('SELECT name, emote FROM maps ORDER BY rotation_order AS
 
 /**
  * 설정값
- * ROTATION_INTERVAL: 90분 (단위: 밀리초)
+ * ROTATION_INTERVAL: 60분 (단위: 밀리초)
  */
-const ROTATION_INTERVAL = 90 * 60 * 1000;
-// 사용자의 기준 정보: 2026-01-17 21:00에 '팔라이스트라'(인덱스 0) 시작
-const EPOCH_TIME = new Date('2026-01-17T21:00:00+09:00').getTime();
+const ROTATION_INTERVAL = 60 * 60 * 1000;
+// cc.shilin.net 기준 정보: 2024-04-21 08:00 -05:00에 '화산심장'(인덱스 1) 시작
+const EPOCH_TIME = new Date('2024-04-21T08:00:00-05:00').getTime() - ROTATION_INTERVAL;
 
 /**
  * 특정 시간에 해당하는 맵 인덱스 계산
@@ -88,7 +88,7 @@ export function getNextMapSchedules(targetMapName, count = 5) {
     // 하지만 현재 진행 중인 경우, 사용자는 '지금'을 포함해서 알고 싶어할 것이므로 포함.
     let firstStartTime = currentRotationStartTime + (turnsDiff * ROTATION_INTERVAL);
 
-    // 만약 계산된 시작 시간이 현재 시간보다 90분(1텀) 이상 전이라면 (즉, 이미 끝난 텀이라면) 보정
+    // 만약 계산된 시작 시간이 현재 시간보다 60분(1텀) 이상 전이라면 (즉, 이미 끝난 텀이라면) 보정
     // 로직상 turnsDiff가 0이면 현재 텀의 시작시간이 됨. (이미 지났지만 현재 진행중)
     // 따라서 별도 보정 불필요. 
 

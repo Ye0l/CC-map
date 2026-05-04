@@ -10,11 +10,6 @@
     "image": "volcano.png"
   },
   {
-    "name": "동방 꼭두각시 어전",
-    "emote": "dolls",
-    "image": "clockwork.png"
-  },
-  {
     "name": "바닷가 전투장",
     "emote": "island",
     "image": "seaside.png"
@@ -23,6 +18,15 @@
     "name": "절정의 구름",
     "emote": "cloud_tornado",
     "image": "cloud.png"
+  },
+  {
+    "name": "동방 꼭두각시 어전",
+    "emote": "dolls",
+    "image": "clockwork.png"
+  },
+  {
+    "name": "하르모니아 전쟁도서관",
+    "emote": "books"
   },
   {
     "name": "붉은 사막",

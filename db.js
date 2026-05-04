@@ -82,26 +82,33 @@ const initDb = () => {
         )
     `);
 
-  // 데이터 마이그레이션 (map_list.json -> DB)
-  const count = db.prepare('SELECT COUNT(*) AS count FROM maps').get().count;
-  if (count === 0) {
-    console.log('Migrating data from map_list.json...');
-    const mapListPath = path.join(__dirname, 'map_list.json');
-    if (fs.existsSync(mapListPath)) {
-      const maps = JSON.parse(fs.readFileSync(mapListPath, 'utf8'));
+  // 데이터 동기화 (map_list.json -> DB)
+  const mapListPath = path.join(__dirname, 'map_list.json');
+  if (fs.existsSync(mapListPath)) {
+    const maps = JSON.parse(fs.readFileSync(mapListPath, 'utf8'));
+    const upsert = db.prepare(`
+      INSERT INTO maps (name, emote, rotation_order)
+      VALUES (@name, @emote, @order)
+      ON CONFLICT(rotation_order) DO UPDATE SET
+        name = excluded.name,
+        emote = excluded.emote
+    `);
+    const deleteRemovedMaps = db.prepare(`
+      DELETE FROM maps
+      WHERE rotation_order >= ?
+         OR name NOT IN (${maps.map(() => '?').join(', ')})
+    `);
+    const syncMaps = db.transaction((maps) => {
+      deleteRemovedMaps.run(maps.length, ...maps.map(map => map.name));
+      for (let i = 0; i < maps.length; i++) {
+        upsert.run({ name: maps[i].name, emote: maps[i].emote, order: i });
+      }
+    });
 
-      const insert = db.prepare('INSERT INTO maps (name, emote, rotation_order) VALUES (@name, @emote, @order)');
-      const insertMany = db.transaction((maps) => {
-        for (let i = 0; i < maps.length; i++) {
-          insert.run({ name: maps[i].name, emote: maps[i].emote, order: i });
-        }
-      });
-
-      insertMany(maps);
-      console.log(`Migrated ${maps.length} maps.`);
-    } else {
-      console.warn('map_list.json not found. Database is empty.');
-    }
+    syncMaps(maps);
+    console.log(`Synced ${maps.length} maps.`);
+  } else {
+    console.warn('map_list.json not found. Map data sync skipped.');
   }
 
   // 데이터 마이그레이션 (ff14_pvp_skills.json -> job_seeds)

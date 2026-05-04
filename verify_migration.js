@@ -21,8 +21,19 @@ try {
   const rotation = getCurrentRotation();
   console.log('Current Rotation:', rotation);
 
-  const schedules = getNextMapSchedules(maps[0], 2);
-  console.log(`Schedules for ${maps[0]}:`, schedules);
+  const harmonias = maps.find(map => map.name === '하르모니아 전쟁도서관');
+  if (!harmonias) {
+    console.error('ERROR: 하르모니아 전쟁도서관 map not found!');
+    process.exit(1);
+  }
+
+  const schedules = getNextMapSchedules(maps[0].name, 2);
+  console.log(`Schedules for ${maps[0].name}:`, schedules);
+
+  if (schedules.length === 0) {
+    console.error('ERROR: No schedules found!');
+    process.exit(1);
+  }
 
   console.log('--- Verification Success ---');
 } catch (error) {
