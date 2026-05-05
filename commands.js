@@ -12,7 +12,7 @@ const CC_RANKING_API_BASE = (config.ccRankingApiBase || 'https://cc-ranking-api.
 const CC_RANKING_PUBLIC_SITE_BASE = (
     config.ccRankingPublicSiteBase ||
     config.ccRankingSiteBase ||
-    CC_RANKING_API_BASE
+    'https://kstr.dev/cc-ranking'
 ).replace(/\/+$/, '');
 
 const getMapImage = (mapName) => {
