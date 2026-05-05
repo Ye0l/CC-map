@@ -8,6 +8,8 @@ import { AttachmentBuilder } from 'discord.js';
 import mapList from './map_list.json' with { type: "json" };
 import config from './config.json' with { type: "json" };
 
+const CC_RANKING_API_BASE = (config.ccRankingApiBase || 'https://cc-ranking-api.casiya03.workers.dev').replace(/\/+$/, '');
+
 const getMapImage = (mapName) => {
     const mapInfo = mapList.find(m => m.name === mapName);
     if (!mapInfo || !mapInfo.image) return null;
@@ -17,6 +19,108 @@ const getMapImage = (mapName) => {
         return new AttachmentBuilder(imagePath, { name: mapInfo.image });
     }
     return null;
+};
+
+const truncateText = (value, maxLength = 1024) => {
+    const text = String(value ?? '');
+    if (text.length <= maxLength) return text;
+    return `${text.slice(0, maxLength - 3)}...`;
+};
+
+const movementIcon = (movement) => {
+    if (!movement) return '-';
+    if (movement.direction === 'up') return `▲ ${movement.text}`;
+    if (movement.direction === 'down') return `▼ ${movement.text}`;
+    if (movement.direction === 'new') return 'NEW';
+    return movement.text || '-';
+};
+
+const formatRankingEntry = (entry) => {
+    const tier = entry.tier || '-';
+    const points = entry.points ? ` · 평점 ${entry.points}` : '';
+    const wins = Number.isInteger(entry.wins) ? ` · ${entry.wins}승` : '';
+    const movement = movementIcon(entry.movement);
+    return `#${entry.rank} **${entry.character_name}@${entry.server_name}**\n${tier}${points}${wins} · 변동 ${movement}`;
+};
+
+const buildRankingUrl = (pathName, params = {}) => {
+    const url = new URL(pathName, CC_RANKING_API_BASE);
+    for (const [key, value] of Object.entries(params)) {
+        if (value !== undefined && value !== null && value !== '') {
+            url.searchParams.set(key, value);
+        }
+    }
+    return url;
+};
+
+const fetchRankingJson = async (pathName, params = {}) => {
+    const url = buildRankingUrl(pathName, params);
+    const response = await fetch(url);
+    if (!response.ok) {
+        let detail = '';
+        try {
+            const errorBody = await response.json();
+            detail = errorBody.error || errorBody.message || '';
+        } catch (e) {
+            detail = await response.text().catch(() => '');
+        }
+        throw new Error(`Ranking API ${response.status}: ${detail || response.statusText}`);
+    }
+    return response.json();
+};
+
+const buildCharacterEmbed = (data) => {
+    const character = data.character;
+    const apiEmbed = data.discord_embed || {};
+    const embed = new EmbedBuilder()
+        .setColor(apiEmbed.color || 0x58D68D)
+        .setTitle(apiEmbed.title || `#${character.rank} ${character.character_name}@${character.server_name}`)
+        .setDescription(apiEmbed.description || formatRankingEntry(character))
+        .setTimestamp();
+
+    const fields = Array.isArray(apiEmbed.fields) ? apiEmbed.fields : [];
+    if (fields.length > 0) {
+        embed.addFields(fields.map(field => ({
+            name: truncateText(field.name, 256),
+            value: truncateText(field.value, 1024),
+            inline: Boolean(field.inline)
+        })));
+    }
+
+    const summary = data.summary;
+    if (summary) {
+        embed.addFields({
+            name: '순위 변화',
+            value: `첫 기록 #${summary.first_rank} → 최신 #${summary.latest_rank} (${summary.rank_delta >= 0 ? '+' : ''}${summary.rank_delta})`,
+            inline: false
+        });
+    }
+
+    const recentHistory = Array.isArray(data.history) ? data.history.slice(-5) : [];
+    if (recentHistory.length > 0) {
+        embed.addFields({
+            name: '최근 기록',
+            value: truncateText(recentHistory.map(item => {
+                const wins = Number.isInteger(item.wins) ? ` · ${item.wins}승` : '';
+                return `#${item.rank} ${item.tier || '-'}${wins} · ${item.source_time}`;
+            }).join('\n'), 1024),
+            inline: false
+        });
+    }
+
+    if (apiEmbed.footer?.text) {
+        embed.setFooter({ text: apiEmbed.footer.text });
+    } else if (character.source_time) {
+        embed.setFooter({ text: character.source_time });
+    }
+
+    if (data.graph_url) {
+        const graphUrl = new URL(data.graph_url, CC_RANKING_API_BASE).toString();
+        embed.setImage(graphUrl);
+        embed.setURL(graphUrl);
+    }
+
+    return embed;
 };
 
 // 직업 이모지 상수
@@ -664,6 +768,191 @@ const commands = [
     },
     {
         data: new SlashCommandBuilder()
+            .setName('ranking')
+            .setNameLocalizations({ 'ko': '랭킹' })
+            .setDescription('Check Crystalline Conflict rankings.')
+            .setDescriptionLocalizations({ 'ko': '크리스탈 컨플릭트 랭킹을 확인합니다.' })
+            .addSubcommand(subcommand =>
+                subcommand
+                    .setName('top')
+                    .setNameLocalizations({ 'ko': '상위' })
+                    .setDescription('Shows top ranked characters.')
+                    .setDescriptionLocalizations({ 'ko': '상위 랭킹 캐릭터를 보여줍니다.' })
+                    .addIntegerOption(option =>
+                        option.setName('limit')
+                            .setNameLocalizations({ 'ko': '개수' })
+                            .setDescription('Number of entries to show (1-20)')
+                            .setDescriptionLocalizations({ 'ko': '표시할 랭킹 수 (1-20)' })
+                            .setRequired(false)
+                            .setMinValue(1)
+                            .setMaxValue(20)
+                    )
+                    .addIntegerOption(option =>
+                        option.setName('snapshot_id')
+                            .setNameLocalizations({ 'ko': '스냅샷' })
+                            .setDescription('Snapshot ID to view')
+                            .setDescriptionLocalizations({ 'ko': '조회할 스냅샷 ID' })
+                            .setRequired(false)
+                    )
+            )
+            .addSubcommand(subcommand =>
+                subcommand
+                    .setName('search')
+                    .setNameLocalizations({ 'ko': '검색' })
+                    .setDescription('Search ranked characters.')
+                    .setDescriptionLocalizations({ 'ko': '랭킹에 기록된 캐릭터를 검색합니다.' })
+                    .addStringOption(option =>
+                        option.setName('query')
+                            .setNameLocalizations({ 'ko': '검색어' })
+                            .setDescription('Character name keyword')
+                            .setDescriptionLocalizations({ 'ko': '캐릭터명 검색어' })
+                            .setRequired(true)
+                    )
+            )
+            .addSubcommand(subcommand =>
+                subcommand
+                    .setName('character')
+                    .setNameLocalizations({ 'ko': '캐릭터' })
+                    .setDescription('Shows a character ranking detail.')
+                    .setDescriptionLocalizations({ 'ko': '캐릭터 랭킹 상세 정보를 보여줍니다.' })
+                    .addStringOption(option =>
+                        option.setName('character')
+                            .setNameLocalizations({ 'ko': '캐릭터' })
+                            .setDescription('Character name or autocomplete result')
+                            .setDescriptionLocalizations({ 'ko': '캐릭터명 또는 자동완성 결과' })
+                            .setRequired(true)
+                            .setAutocomplete(true)
+                    )
+                    .addStringOption(option =>
+                        option.setName('server')
+                            .setNameLocalizations({ 'ko': '서버' })
+                            .setDescription('Server name, required when not using autocomplete')
+                            .setDescriptionLocalizations({ 'ko': '자동완성을 쓰지 않을 때 필요한 서버명' })
+                            .setRequired(false)
+                    )
+            )
+            .addSubcommand(subcommand =>
+                subcommand
+                    .setName('snapshots')
+                    .setNameLocalizations({ 'ko': '스냅샷' })
+                    .setDescription('Shows available ranking snapshots.')
+                    .setDescriptionLocalizations({ 'ko': '조회 가능한 랭킹 스냅샷을 보여줍니다.' })
+            ),
+        async execute(interaction) {
+            const subcommand = interaction.options.getSubcommand();
+            await interaction.deferReply();
+
+            try {
+                if (subcommand === 'top') {
+                    const limit = interaction.options.getInteger('limit') || 10;
+                    const snapshotId = interaction.options.getInteger('snapshot_id');
+                    const data = await fetchRankingJson('/api/v1/top', { limit, snapshot_id: snapshotId });
+                    const entries = Array.isArray(data.entries) ? data.entries : [];
+
+                    if (entries.length === 0) {
+                        await interaction.editReply('랭킹 데이터가 없습니다.');
+                        return;
+                    }
+
+                    const embed = new EmbedBuilder()
+                        .setColor(0x58D68D)
+                        .setTitle(`🏆 크리스탈 컨플릭트 TOP ${entries.length}`)
+                        .setDescription(truncateText(entries.map(formatRankingEntry).join('\n\n'), 4096))
+                        .setFooter({ text: data.snapshot?.source_time_text || 'CC Ranking' });
+
+                    await interaction.editReply({ embeds: [embed] });
+                    return;
+                }
+
+                if (subcommand === 'search') {
+                    const query = interaction.options.getString('query');
+                    const data = await fetchRankingJson('/api/v1/search', { q: query });
+                    const characters = Array.isArray(data.characters) ? data.characters : [];
+
+                    if (characters.length === 0) {
+                        await interaction.editReply(`'${query}' 검색 결과가 없습니다.`);
+                        return;
+                    }
+
+                    const description = characters.slice(0, 10).map(character => (
+                        `**${character.character_name}@${character.server_name}**\n` +
+                        `최고 #${character.best_rank} · 최저 #${character.worst_rank} · 기록 ${character.samples}회 · key: \`${character.character_key}\``
+                    )).join('\n\n');
+
+                    const embed = new EmbedBuilder()
+                        .setColor(0x58D68D)
+                        .setTitle(`🔎 랭킹 검색: ${query}`)
+                        .setDescription(truncateText(description, 4096))
+                        .setFooter({ text: `상세 조회: /ranking character character:${characters[0].character_key}` });
+
+                    await interaction.editReply({ embeds: [embed] });
+                    return;
+                }
+
+                if (subcommand === 'character') {
+                    const characterInput = interaction.options.getString('character');
+                    const server = interaction.options.getString('server');
+                    const params = characterInput.includes('::') && !server
+                        ? { key: characterInput }
+                        : { name: characterInput, server };
+
+                    if (!params.key && !params.server) {
+                        await interaction.editReply('서버명을 같이 입력하거나 자동완성 목록에서 캐릭터를 선택해주세요.');
+                        return;
+                    }
+
+                    const data = await fetchRankingJson('/api/v1/character', params);
+                    await interaction.editReply({ embeds: [buildCharacterEmbed(data)] });
+                    return;
+                }
+
+                if (subcommand === 'snapshots') {
+                    const data = await fetchRankingJson('/api/v1/snapshots');
+                    const snapshots = Array.isArray(data.snapshots) ? data.snapshots : [];
+
+                    if (snapshots.length === 0) {
+                        await interaction.editReply('조회 가능한 스냅샷이 없습니다.');
+                        return;
+                    }
+
+                    const embed = new EmbedBuilder()
+                        .setColor(0x58D68D)
+                        .setTitle('📌 랭킹 스냅샷')
+                        .setDescription(snapshots.slice(0, 10).map(snapshot => (
+                            `ID \`${snapshot.id}\` · 시즌 ${snapshot.season} · ${snapshot.entry_count}명\n${snapshot.source_time_text}`
+                        )).join('\n\n'));
+
+                    await interaction.editReply({ embeds: [embed] });
+                }
+            } catch (error) {
+                console.error(error);
+                await interaction.editReply('랭킹 API를 호출하는 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
+            }
+        },
+        async autocomplete(interaction) {
+            const focused = interaction.options.getFocused();
+            if (!focused || focused.length < 1) {
+                await interaction.respond([]);
+                return;
+            }
+
+            try {
+                const data = await fetchRankingJson('/api/v1/search', { q: focused });
+                const characters = Array.isArray(data.characters) ? data.characters : [];
+                await interaction.respond(
+                    characters.slice(0, 25).map(character => ({
+                        name: `${character.character_name}@${character.server_name} · 최고 #${character.best_rank}`,
+                        value: character.character_key
+                    }))
+                );
+            } catch (error) {
+                console.error('랭킹 자동완성 처리 중 오류 발생:', error);
+                await interaction.respond([]);
+            }
+        }
+    },
+    {
+        data: new SlashCommandBuilder()
             .setName('help')
             .setNameLocalizations({ 'ko': '도움말' })
             .setDescription('Shows list of available commands.')
@@ -703,6 +992,9 @@ PvP 직업 추천 (단일/연속)
 **/podcast (팟캐스트)**
 오늘의 크리스탈라인 컨플릭트 팟캐스트 듣기
 
+**/ranking (랭킹)**
+크리스탈 컨플릭트 랭킹 조회 (상위/검색/캐릭터/스냅샷)
+
 **/ask (질문)**
 교관님에게 물어봐요! (Beta)
             `.trim();
@@ -711,7 +1003,7 @@ PvP 직업 추천 (단일/연속)
                 .setColor(0x0099FF)
                 .setTitle('📖 명령어 도움말')
                 .setDescription(helpMessage)
-                .setFooter({ text: 'CC-Map Bot | Last Update: 2026-02-12' });
+                .setFooter({ text: 'CC-Map Bot | Last Update: 2026-05-05' });
 
             await interaction.reply({ embeds: [embed], ephemeral: true });
         }
