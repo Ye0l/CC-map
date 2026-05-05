@@ -9,6 +9,11 @@ import mapList from './map_list.json' with { type: "json" };
 import config from './config.json' with { type: "json" };
 
 const CC_RANKING_API_BASE = (config.ccRankingApiBase || 'https://cc-ranking-api.casiya03.workers.dev').replace(/\/+$/, '');
+const CC_RANKING_PUBLIC_SITE_BASE = (
+    config.ccRankingPublicSiteBase ||
+    config.ccRankingSiteBase ||
+    CC_RANKING_API_BASE
+).replace(/\/+$/, '');
 
 const getMapImage = (mapName) => {
     const mapInfo = mapList.find(m => m.name === mapName);
@@ -51,6 +56,20 @@ const buildRankingUrl = (pathName, params = {}) => {
         }
     }
     return url;
+};
+
+const buildCharacterDetailUrl = (data) => {
+    const character = data.character || {};
+    const detailUrl = data.detail_url || character.detail_url;
+    if (detailUrl) {
+        return new URL(detailUrl, CC_RANKING_PUBLIC_SITE_BASE).toString();
+    }
+
+    if (!character.character_id) return null;
+
+    const url = new URL('details/', `${CC_RANKING_PUBLIC_SITE_BASE}/`);
+    url.searchParams.set('id', character.character_id);
+    return url.toString();
 };
 
 const fetchRankingJson = async (pathName, params = {}) => {
@@ -114,10 +133,14 @@ const buildCharacterEmbed = (data) => {
         embed.setFooter({ text: character.source_time });
     }
 
+    const detailUrl = buildCharacterDetailUrl(data);
+    if (detailUrl) {
+        embed.setURL(detailUrl);
+    }
+
     if (data.graph_url) {
         const graphUrl = new URL(data.graph_url, CC_RANKING_API_BASE).toString();
         embed.setImage(graphUrl);
-        embed.setURL(graphUrl);
     }
 
     return embed;

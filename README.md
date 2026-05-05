@@ -70,6 +70,7 @@
 - **/ranking (랭킹)**
   - 크리스탈 컨플릭트 랭킹 API를 조회합니다.
   - API 기본 주소: `https://cc-ranking-api.casiya03.workers.dev`
+  - 공개 상세 페이지 주소가 API 주소와 다르면 `config.json`에 `ccRankingPublicSiteBase`를 설정하세요.
   - **하위 명령**:
     - `top (상위)`: 상위 랭킹을 표시합니다. `limit`, `snapshot_id` 옵션을 사용할 수 있습니다.
     - `search (검색)`: 캐릭터명을 검색합니다.
